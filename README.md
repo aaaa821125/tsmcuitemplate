@@ -176,6 +176,7 @@ The edge function protects all routes. Keep credentials in Netlify environment v
 
 ```text
 apps/template/                  product seed copied by create-app
+apps/<name>/                    product apps created via `npm run create-app <name>` (e.g. apps/hr-pulse)
 scripts/                        create, deploy, exact upgrade, governance check
 .claude/                        generated Claude adapter and shared-skill view
 .codex/                         generated Codex hook adapter
