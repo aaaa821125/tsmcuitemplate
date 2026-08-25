@@ -49,10 +49,16 @@ import {
   Select,
   Tag,
   Badge,
+  Alert,
+  // @story-baseline: @qijenchen/design-system/components/Alert/alert.stories.tsx
   ChartContainer,
   ChartTooltip,
   ChartTooltipContent,
   type ChartConfig,
+  buildPersonProfileCard,
+  ScrollArea,
+  // @story-baseline: @qijenchen/design-system/components/ScrollArea/scroll-area.stories.tsx
+  // @story-baseline: @qijenchen/design-system/components/PeoplePicker/people-picker.stories.tsx
 } from '@qijenchen/design-system'
 import {
   LayoutDashboard,
@@ -113,35 +119,45 @@ const THEME_SCORES: ThemeScore[] = [
   { id: 'compensate', label: 'Compensate', icon: DollarSign, score: 76, delta: { direction: 'flat', text: '0' } },
 ]
 
-type AttentionSeverity = 'error' | 'warning' | 'success'
+type AttentionVariant = 'error' | 'warning' | 'success'
 
-const ATTENTION_ITEMS: { id: string; severity: AttentionSeverity; text: string }[] = [
-  { id: 'perf-reviews', severity: 'error', text: 'Performance reviews at 58% — 42% behind target. Due June 30. Owner: Performance/L&D Division.' },
-  { id: 'er-data', severity: 'error', text: 'Employee Relations data overdue — 0% submitted. Due Jul 5.' },
-  { id: 'turnover', severity: 'warning', text: 'Voluntary turnover up 3% QoQ — Top affected: Engineering (8.2%).' },
-  { id: 'offer-rate', severity: 'success', text: 'Offer acceptance rate improved to 87% — above target.' },
+// 消費 DS `Alert`(alert.spec.md:「頁面內需要持續存在的狀態通知」+ variant 對應 icon/色彩 canonical),
+// 取代手刻色塊 row —— title/description 對齊 Alert 既有 anatomy,不再自訂 status dot。
+const ATTENTION_ITEMS: { id: string; variant: AttentionVariant; title: string; description: string }[] = [
+  { id: 'perf-reviews', variant: 'error', title: 'Performance reviews at 58% — 42% behind target', description: 'Due June 30. Owner: Performance/L&D Division.' },
+  { id: 'er-data', variant: 'error', title: 'Employee Relations data overdue', description: '0% submitted. Due Jul 5.' },
+  { id: 'turnover', variant: 'warning', title: 'Voluntary turnover up 3% QoQ', description: 'Top affected: Engineering (8.2%).' },
+  { id: 'headcount', variant: 'warning', title: 'Headcount 4% over plan in Engineering', description: 'Review hiring pace against budget.' },
+  { id: 'offer-rate', variant: 'success', title: 'Offer acceptance rate improved to 87%', description: 'Above target.' },
 ]
-
-// List item anatomy(Family 2,無單一 canonical component,依 element-anatomy.spec.md 自行組 row):
-// [status dot] [content] — reading-mode 掃視列表,非 Menu item / DataTable 情境。
-const SEVERITY_DOT_CLASS: Record<AttentionSeverity, string> = {
-  error: 'bg-error',
-  warning: 'bg-warning',
-  success: 'bg-success',
-}
-const SEVERITY_BG_CLASS: Record<AttentionSeverity, string> = {
-  error: 'bg-error-subtle',
-  warning: 'bg-warning-subtle',
-  success: 'bg-success-subtle',
-}
 
 const ACTIVITY_ROWS = [
-  { id: 'comp', theme: 'Compensation & Benefits', desc: 'Compa-ratio and pay equity ratio refreshed', date: 'Jun 30, 2025', uploader: 'M. Lai', empId: '103482' },
-  { id: 'wfp', theme: 'Workforce Planning', desc: 'Headcount, absenteeism and revenue/employee refreshed', date: 'Jun 30, 2025', uploader: 'R. Wu', empId: '108217' },
-  { id: 'perf', theme: 'Performance/L&D', desc: 'Review completion data refreshed', date: 'Jun 30, 2025', uploader: 'T. Hsu', empId: '105690' },
-  { id: 'ta', theme: 'Talent Acquisition', desc: 'Time to fill, cost per hire and offer acceptance refreshed', date: 'Jun 28, 2025', uploader: 'J. Kao', empId: '101933' },
-  { id: 'retain', theme: 'Retention & Turnover', desc: 'Turnover and exit data refreshed', date: 'Jun 28, 2025', uploader: 'S. Fang', empId: '107456' },
+  { id: 'comp', theme: 'Compensation & Benefits', date: 'Jun 30, 2025', uploader: 'M. Lai', employeeNumber: '103482', avatarUrl: 'https://i.pravatar.cc/64?img=47' },
+  { id: 'wfp', theme: 'Workforce Planning', date: 'Jun 30, 2025', uploader: 'R. Wu', employeeNumber: '108217', avatarUrl: 'https://i.pravatar.cc/64?img=12' },
+  { id: 'perf', theme: 'Performance/L&D', date: 'Jun 30, 2025', uploader: 'T. Hsu', employeeNumber: '105690', avatarUrl: 'https://i.pravatar.cc/64?img=33' },
+  { id: 'ta', theme: 'Talent Acquisition', date: 'Jun 28, 2025', uploader: 'J. Kao', employeeNumber: '101933', avatarUrl: 'https://i.pravatar.cc/64?img=68' },
+  { id: 'retain', theme: 'Retention & Turnover', date: 'Jun 28, 2025', uploader: 'S. Fang', employeeNumber: '107456', avatarUrl: 'https://i.pravatar.cc/64?img=5' },
 ]
+
+// Activity row — 3 欄(item / latest update time / uploader),各欄各自留白、不互相擠壓:
+// 消費 DS Avatar primitive(帶 src 頭像照片)+ buildPersonProfileCard(avatar.spec.md「person avatar
+// hover → ProfileCard」),名字/工號直接顯示(非只靠 hover)。
+// @story-baseline: @qijenchen/design-system/components/PeoplePicker/people-picker.stories.tsx
+function ActivityRow({ theme, date, uploader, employeeNumber, avatarUrl }: { theme: string; date: string; uploader: string; employeeNumber: string; avatarUrl: string }) {
+  return (
+    <div className="grid grid-cols-[1fr_auto_auto] items-center gap-[var(--layout-space-loose)]">
+      <span className="text-caption font-bold text-foreground min-w-0 truncate">{theme}</span>
+      <span className="text-caption text-fg-muted tabular-nums whitespace-nowrap">{date}</span>
+      <div className="flex items-center gap-2">
+        <Avatar src={avatarUrl} alt={uploader} size={24} hoverCard={buildPersonProfileCard({ name: uploader, avatarUrl, employeeNumber })} />
+        <div className="flex flex-col items-start leading-tight">
+          <span className="text-caption font-bold text-foreground whitespace-nowrap">{uploader}</span>
+          <span className="text-caption text-fg-muted whitespace-nowrap">{employeeNumber}</span>
+        </div>
+      </div>
+    </div>
+  )
+}
 
 const trendData = [
   { quarter: "Q3'24", score: 72 },
@@ -269,42 +285,29 @@ function OverviewPage() {
 
       {/* Row 2: Attention Required + Recent Data Updates */}
       <section className="grid grid-cols-2 gap-[var(--layout-space-loose)] items-stretch">
-        <ScoreCard>
-          <div className="text-body font-bold flex items-center gap-2">⚠️ Attention Required</div>
-          <div className="flex flex-col gap-2 mt-[var(--layout-space-tight)]">
+        <ScoreCard className="flex flex-col">
+          <div className="text-body font-bold">Attention Required</div>
+          {/* @story-baseline: @qijenchen/design-system/components/ScrollArea/scroll-area.stories.tsx */}
+          {/* 填滿卡片剩餘高度(對齊右側 Recent Data Updates 卡片,由 grid items-stretch 決定),超出捲動 */}
+          {/* @story-baseline: @qijenchen/design-system/components/Alert/alert.stories.tsx */}
+          <ScrollArea className="flex-1 min-h-0 mt-[var(--layout-space-tight)]">
+          <div className="flex flex-col gap-[var(--layout-space-tight)]">
             {ATTENTION_ITEMS.map((item) => (
-              <div
-                key={item.id}
-                className={`flex items-start gap-2 rounded-md border border-divider p-2.5 ${SEVERITY_BG_CLASS[item.severity]}`}
-              >
-                <span className={`mt-1.5 h-2 w-2 flex-none rounded-full ${SEVERITY_DOT_CLASS[item.severity]}`} />
-                <p className="text-caption text-foreground leading-relaxed m-0">{item.text}</p>
-              </div>
+              <Alert key={item.id} variant={item.variant} title={item.title} description={item.description} />
             ))}
           </div>
+          </ScrollArea>
         </ScoreCard>
 
         <ScoreCard>
-          <div className="text-body font-bold flex items-center gap-2">🕒 Recent Data Updates</div>
+          <div className="text-body font-bold">Recent Data Updates</div>
           <p className="text-caption text-fg-muted mt-0.5">
             The 5 most recent refreshes across source teams — when each was updated and by whom.
           </p>
-          <div className="mt-[var(--layout-space-tight)]">
+          <div className="mt-[var(--layout-space-tight)] flex flex-col">
             {ACTIVITY_ROWS.map((row, index) => (
-              <div
-                key={row.id}
-                className={`flex items-start justify-between gap-3 py-2.5 flex-wrap ${index > 0 ? 'border-t border-divider' : ''}`}
-              >
-                <div className="min-w-0 flex-1 basis-64">
-                  <div className="text-caption font-bold text-foreground">{row.theme}</div>
-                  <div className="text-caption text-fg-secondary mt-0.5">{row.desc}</div>
-                </div>
-                <div className="flex flex-none flex-col items-end gap-1 text-right ml-auto">
-                  <span className="text-caption text-fg-muted tabular-nums whitespace-nowrap">{row.date}</span>
-                  <span className="text-caption font-medium text-fg-secondary whitespace-nowrap">
-                    {row.uploader} <span className="text-fg-muted font-normal">({row.empId})</span>
-                  </span>
-                </div>
+              <div key={row.id} className={`py-[var(--layout-space-tight)] ${index > 0 ? 'border-t border-divider' : ''}`}>
+                <ActivityRow {...row} />
               </div>
             ))}
           </div>
@@ -317,7 +320,7 @@ function OverviewPage() {
       {/* Row 3: Quarterly Trend + HRPO Insights */}
       <section className="grid grid-cols-2 gap-[var(--layout-space-loose)] items-start">
         <ScoreCard>
-          <div className="text-body font-bold flex items-center gap-2">📈 Quarterly Trend</div>
+          <div className="text-body font-bold">Quarterly Trend</div>
           <ChartContainer config={trendConfig} className="mt-[var(--layout-space-tight)]">
             <BarChart accessibilityLayer data={trendData}>
               <CartesianGrid vertical={false} />
@@ -331,7 +334,7 @@ function OverviewPage() {
         </ScoreCard>
 
         <ScoreCard>
-          <div className="text-body font-bold flex items-center gap-2">💡 HRPO Insights</div>
+          <div className="text-body font-bold">HRPO Insights</div>
           <div className="flex flex-col gap-2.5 mt-[var(--layout-space-tight)]">
             {INSIGHTS.map((insight) => (
               <div key={insight.id} className="flex gap-2 rounded-r-md border-l-[3px] border-primary bg-primary-subtle p-2.5">
