@@ -6,14 +6,16 @@ import { Empty } from '@qijenchen/design-system'
 import { Construction } from 'lucide-react'
 import {
   CATEGORY_META_BY_ID,
-  COMPENSATION,
-  ENGAGEMENT,
-  GLOBALIZATION,
-  PERFORMANCE_MANAGEMENT,
-  RETENTION,
-  TALENT_ACQUISITION,
+  getCompensation,
+  getEngagement,
+  getGlobalization,
+  getPerformanceManagement,
+  getRetention,
+  getTalentAcquisition,
   type CategoryId,
+  type Quarter,
 } from '../data/hr-metrics'
+import { useQuarter } from '../context/quarter-context'
 import { MetricCard } from '../components/MetricCard'
 import { ScoreStat } from '../components/ScoreStat'
 import { TrendIndicator } from '../components/TrendIndicator'
@@ -24,76 +26,88 @@ interface CategoryDetailPageProps {
   categoryId: CategoryId
 }
 
-function useCategoryHeadline(categoryId: CategoryId): { metricLabel: string; headline: ReactNode } {
+function useCategoryHeadline(categoryId: CategoryId, quarter: Quarter): { metricLabel: string; headline: ReactNode } {
   switch (categoryId) {
-    case 'talent-acquisition':
+    case 'talent-acquisition': {
+      const talentAcquisition = getTalentAcquisition(quarter)
       return {
-        metricLabel: TALENT_ACQUISITION.metricLabel,
+        metricLabel: talentAcquisition.metricLabel,
         headline: (
           <ScoreStat
-            value={TALENT_ACQUISITION.score}
+            value={talentAcquisition.score}
             suffix="/ 100"
-            trend={<TrendIndicator {...TALENT_ACQUISITION.trend} />}
+            trend={<TrendIndicator {...talentAcquisition.trend} />}
           />
         ),
       }
-    case 'retention':
+    }
+    case 'retention': {
+      const retention = getRetention(quarter)
       return {
-        metricLabel: RETENTION.metricLabel,
+        metricLabel: retention.metricLabel,
         headline: (
           <>
             <div className="flex items-baseline justify-between gap-[var(--layout-space-tight)]">
-              <span className="text-h3 font-medium text-foreground">{RETENTION.latestDisplay}</span>
-              <TrendIndicator {...RETENTION.trend} />
+              <span className="text-h3 font-medium text-foreground">{retention.latestDisplay}</span>
+              <TrendIndicator {...retention.trend} />
             </div>
             <div className="mt-[var(--layout-space-tight)]">
-              <TurnoverTrendChart quarters={RETENTION.quarters} />
+              <TurnoverTrendChart quarters={retention.quarters} />
             </div>
           </>
         ),
       }
-    case 'engagement':
+    }
+    case 'engagement': {
+      const engagement = getEngagement(quarter)
       return {
-        metricLabel: ENGAGEMENT.metricLabel,
+        metricLabel: engagement.metricLabel,
         headline: (
-          <ScoreStat value={ENGAGEMENT.score} suffix="/ 100" trend={<TrendIndicator {...ENGAGEMENT.trend} />} />
+          <ScoreStat value={engagement.score} suffix="/ 100" trend={<TrendIndicator {...engagement.trend} />} />
         ),
       }
-    case 'performance':
+    }
+    case 'performance': {
+      const performanceManagement = getPerformanceManagement(quarter)
       return {
-        metricLabel: PERFORMANCE_MANAGEMENT.metricLabel,
-        headline: (
-          <>
-            <CategoryDonutChart segments={PERFORMANCE_MANAGEMENT.segments} />
-            <div className="mt-[var(--layout-space-tight)]">
-              <TrendIndicator {...PERFORMANCE_MANAGEMENT.trend} />
-            </div>
-          </>
-        ),
-      }
-    case 'globalization':
-      return {
-        metricLabel: GLOBALIZATION.metricLabel,
+        metricLabel: performanceManagement.metricLabel,
         headline: (
           <>
-            <CategoryDonutChart segments={GLOBALIZATION.segments} />
+            <CategoryDonutChart segments={performanceManagement.segments} />
             <div className="mt-[var(--layout-space-tight)]">
-              <TrendIndicator {...GLOBALIZATION.trend} />
+              <TrendIndicator {...performanceManagement.trend} />
             </div>
           </>
         ),
       }
-    case 'compensation':
+    }
+    case 'globalization': {
+      const globalization = getGlobalization(quarter)
       return {
-        metricLabel: COMPENSATION.metricLabel,
+        metricLabel: globalization.metricLabel,
+        headline: (
+          <>
+            <CategoryDonutChart segments={globalization.segments} />
+            <div className="mt-[var(--layout-space-tight)]">
+              <TrendIndicator {...globalization.trend} />
+            </div>
+          </>
+        ),
+      }
+    }
+    case 'compensation': {
+      const compensation = getCompensation(quarter)
+      return {
+        metricLabel: compensation.metricLabel,
         headline: (
           <ScoreStat
-            value={COMPENSATION.value.toFixed(2)}
-            caption={`Target: ${COMPENSATION.target.toFixed(2)}`}
-            trend={<TrendIndicator {...COMPENSATION.trend} />}
+            value={compensation.value.toFixed(2)}
+            caption={`Target: ${compensation.target.toFixed(2)}`}
+            trend={<TrendIndicator {...compensation.trend} />}
           />
         ),
       }
+    }
   }
 }
 
@@ -103,7 +117,8 @@ function useCategoryHeadline(categoryId: CategoryId): { metricLabel: string; hea
  */
 export function CategoryDetailPage({ categoryId }: CategoryDetailPageProps) {
   const category = CATEGORY_META_BY_ID[categoryId]
-  const { metricLabel, headline } = useCategoryHeadline(categoryId)
+  const { quarter } = useQuarter()
+  const { metricLabel, headline } = useCategoryHeadline(categoryId, quarter)
   return (
     <div className="px-[var(--layout-space-loose)] py-[var(--layout-space-loose)] flex flex-col gap-[var(--layout-space-loose)]">
       <section className="max-w-sm">

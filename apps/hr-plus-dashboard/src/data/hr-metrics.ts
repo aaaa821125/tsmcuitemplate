@@ -13,6 +13,12 @@ import {
 // 六大類別對齊 Talent Acquisition / Retention & Turnover / Culture & Engagement /
 // Performance Management / Globalization / Compensation & Benefits。
 
+export type Quarter = 'Q1' | 'Q2' | 'Q3' | 'Q4'
+
+export const QUARTERS: Quarter[] = ['Q1', 'Q2', 'Q3', 'Q4']
+
+export const QUARTER_OPTIONS = QUARTERS.map((q) => ({ value: q, label: `2026 ${q}` }))
+
 export type TrendDirection = 'up' | 'down'
 
 export interface Trend {
@@ -21,6 +27,30 @@ export interface Trend {
   percent: number
   /** 這個方向對業務是否為好消息(決定 TrendIndicator 顯示色) */
   isFavorable: boolean
+}
+
+/** 一個指標的四季數值 + Q1 的比較基準(2025 Q4)。 */
+interface QuarterlySeries {
+  /** 2025 Q4 — 只用來算 Q1 2026 的季度環比,不在 UI 上單獨顯示 */
+  baseline: number
+  Q1: number
+  Q2: number
+  Q3: number
+  Q4: number
+}
+
+/**
+ * 計算「與上一季比」的 trend。Q1 用 baseline(2025 Q4)當上一季。
+ * @param higherIsFavorable 數值上升是否為好消息(例如離職率上升是壞消息 → false)
+ */
+function getTrend(series: QuarterlySeries, quarter: Quarter, higherIsFavorable: boolean): Trend {
+  const current = series[quarter]
+  const prevQuarter = QUARTERS[QUARTERS.indexOf(quarter) - 1]
+  const previous = prevQuarter ? series[prevQuarter] : series.baseline
+  const direction: TrendDirection = current >= previous ? 'up' : 'down'
+  const percent = previous === 0 ? 0 : Math.round((Math.abs(current - previous) / previous) * 1000) / 10
+  const isFavorable = (direction === 'up') === higherIsFavorable
+  return { direction, percent, isFavorable }
 }
 
 export type CategoryId =
@@ -46,61 +76,125 @@ export const CATEGORIES: CategoryMeta[] = [
   { id: 'compensation', label: 'Compensation & Benefits', icon: Wallet },
 ]
 
-export const HR_HEALTH = {
-  label: 'HR Health Score',
-  score: 79,
-  trend: { direction: 'up', percent: 4, isFavorable: true } satisfies Trend,
-  description: '六大類別加權綜合分數,反映人力資源對業務的整體健康度。',
+export const CATEGORY_META_BY_ID: Record<CategoryId, CategoryMeta> = Object.fromEntries(
+  CATEGORIES.map((c) => [c.id, c]),
+) as Record<CategoryId, CategoryMeta>
+
+export const HR_HEALTH_ICON: LucideIcon = Activity
+
+// ── HR Health(綜合分數,0-100)──────────────────────────────────────────────
+const HR_HEALTH_SERIES: QuarterlySeries = { baseline: 74, Q1: 75, Q2: 77, Q3: 78, Q4: 79 }
+
+export function getHrHealth(quarter: Quarter) {
+  return {
+    label: 'HR Health Score',
+    score: HR_HEALTH_SERIES[quarter],
+    trend: getTrend(HR_HEALTH_SERIES, quarter, true),
+    description: '六大類別加權綜合分數,反映人力資源對業務的整體健康度。',
+  }
 }
 
-export const TALENT_ACQUISITION = {
-  metricLabel: 'H/C Fulfillment Gap',
-  score: 86,
-  trend: { direction: 'up', percent: 5, isFavorable: true } satisfies Trend,
+// ── Talent Acquisition:H/C Fulfillment Gap(0-100 分數)──────────────────────
+const TALENT_ACQUISITION_SERIES: QuarterlySeries = { baseline: 79, Q1: 81, Q2: 83, Q3: 84, Q4: 86 }
+
+export function getTalentAcquisition(quarter: Quarter) {
+  return {
+    metricLabel: 'H/C Fulfillment Gap',
+    score: TALENT_ACQUISITION_SERIES[quarter],
+    trend: getTrend(TALENT_ACQUISITION_SERIES, quarter, true),
+  }
 }
 
-export const RETENTION = {
-  metricLabel: 'Overall Turnover Rate',
-  quarters: [
-    { quarter: 'Q1', rate: 12.4 },
-    { quarter: 'Q2', rate: 13.1 },
-    { quarter: 'Q3', rate: 11.6 },
-    { quarter: 'Q4', rate: 10.5 },
-  ],
-  latestDisplay: '10.5%',
-  trend: { direction: 'down', percent: 9.5, isFavorable: true } satisfies Trend,
+// ── Retention & Turnover:Overall Turnover Rate(%)────────────────────────────
+const RETENTION_SERIES: QuarterlySeries = { baseline: 13.7, Q1: 12.4, Q2: 13.1, Q3: 11.6, Q4: 10.5 }
+
+export function getRetention(quarter: Quarter) {
+  return {
+    metricLabel: 'Overall Turnover Rate',
+    // 折線圖固定顯示全年 Q1~Q4 讓主管看得到走勢;下方數字/trend 才跟著選取季度變動
+    quarters: QUARTERS.map((q) => ({ quarter: q, rate: RETENTION_SERIES[q] })),
+    latestDisplay: `${RETENTION_SERIES[quarter]}%`,
+    // 離職率上升是壞消息 → higherIsFavorable = false
+    trend: getTrend(RETENTION_SERIES, quarter, false),
+  }
 }
 
-export const ENGAGEMENT = {
-  metricLabel: 'Employee Engagement Survey',
-  score: 76,
-  trend: { direction: 'up', percent: 3, isFavorable: true } satisfies Trend,
+// ── Culture & Engagement:Employee Engagement Survey(0-100 分數)─────────────
+const ENGAGEMENT_SERIES: QuarterlySeries = { baseline: 71, Q1: 72, Q2: 74, Q3: 75, Q4: 76 }
+
+export function getEngagement(quarter: Quarter) {
+  return {
+    metricLabel: 'Employee Engagement Survey',
+    score: ENGAGEMENT_SERIES[quarter],
+    trend: getTrend(ENGAGEMENT_SERIES, quarter, true),
+  }
 }
 
-export const PERFORMANCE_MANAGEMENT = {
-  metricLabel: 'People Manager Effectiveness',
-  segments: [
-    { name: 'Effective', value: 68, fill: 'var(--chart-1)' },
-    { name: 'Developing', value: 24, fill: 'var(--chart-2)' },
-    { name: 'Needs Improvement', value: 8, fill: 'var(--chart-5)' },
-  ],
-  trend: { direction: 'up', percent: 4, isFavorable: true } satisfies Trend,
+// ── Performance Management:People Manager Effectiveness(組成比例)───────────
+interface EffectivenessQuarter {
+  effective: number
+  developing: number
+  needsImprovement: number
+}
+const PERFORMANCE_MANAGEMENT_SERIES: Record<Quarter, EffectivenessQuarter> = {
+  Q1: { effective: 60, developing: 30, needsImprovement: 10 },
+  Q2: { effective: 63, developing: 28, needsImprovement: 9 },
+  Q3: { effective: 66, developing: 25, needsImprovement: 9 },
+  Q4: { effective: 68, developing: 24, needsImprovement: 8 },
+}
+const PERFORMANCE_MANAGEMENT_EFFECTIVE_SERIES: QuarterlySeries = {
+  baseline: 57,
+  Q1: 60,
+  Q2: 63,
+  Q3: 66,
+  Q4: 68,
 }
 
-export const GLOBALIZATION = {
-  metricLabel: 'Local Manager Representation',
-  segments: [
-    { name: 'Local Manager', value: 64, fill: 'var(--chart-1)' },
-    { name: 'Expatriate', value: 36, fill: 'var(--chart-4)' },
-  ],
-  trend: { direction: 'up', percent: 6, isFavorable: true } satisfies Trend,
+export function getPerformanceManagement(quarter: Quarter) {
+  const composition = PERFORMANCE_MANAGEMENT_SERIES[quarter]
+  return {
+    metricLabel: 'People Manager Effectiveness',
+    segments: [
+      { name: 'Effective', value: composition.effective, fill: 'var(--chart-1)' },
+      { name: 'Developing', value: composition.developing, fill: 'var(--chart-2)' },
+      { name: 'Needs Improvement', value: composition.needsImprovement, fill: 'var(--chart-5)' },
+    ],
+    trend: getTrend(PERFORMANCE_MANAGEMENT_EFFECTIVE_SERIES, quarter, true),
+  }
 }
 
-export const COMPENSATION = {
-  metricLabel: 'Compa-ratio',
-  value: 0.95,
-  target: 1.0,
-  trend: { direction: 'down', percent: 2, isFavorable: false } satisfies Trend,
+// ── Globalization:Local Manager Representation(組成比例)────────────────────
+const GLOBALIZATION_SERIES: Record<Quarter, { local: number }> = {
+  Q1: { local: 58 },
+  Q2: { local: 60 },
+  Q3: { local: 62 },
+  Q4: { local: 64 },
+}
+const GLOBALIZATION_LOCAL_SERIES: QuarterlySeries = { baseline: 55, Q1: 58, Q2: 60, Q3: 62, Q4: 64 }
+
+export function getGlobalization(quarter: Quarter) {
+  const local = GLOBALIZATION_SERIES[quarter].local
+  return {
+    metricLabel: 'Local Manager Representation',
+    segments: [
+      { name: 'Local Manager', value: local, fill: 'var(--chart-1)' },
+      { name: 'Expatriate', value: 100 - local, fill: 'var(--chart-4)' },
+    ],
+    trend: getTrend(GLOBALIZATION_LOCAL_SERIES, quarter, true),
+  }
+}
+
+// ── Compensation & Benefits:Compa-ratio(target 1.00)─────────────────────────
+const COMPENSATION_SERIES: QuarterlySeries = { baseline: 0.97, Q1: 0.97, Q2: 0.96, Q3: 0.96, Q4: 0.95 }
+
+export function getCompensation(quarter: Quarter) {
+  return {
+    metricLabel: 'Compa-ratio',
+    value: COMPENSATION_SERIES[quarter],
+    target: 1.0,
+    // Compa-ratio 走低是壞消息 → higherIsFavorable = true(上升才是好消息)
+    trend: getTrend(COMPENSATION_SERIES, quarter, true),
+  }
 }
 
 export interface AttentionItem {
@@ -183,9 +277,3 @@ export const LAST_UPDATED_LOG: UpdateLogEntry[] = [
     uploader: { name: 'Grace Lee', employeeId: 'EMP10023', color: 'red' },
   },
 ]
-
-export const CATEGORY_META_BY_ID: Record<CategoryId, CategoryMeta> = Object.fromEntries(
-  CATEGORIES.map((c) => [c.id, c]),
-) as Record<CategoryId, CategoryMeta>
-
-export const HR_HEALTH_ICON: LucideIcon = Activity

@@ -20,13 +20,12 @@
 //   3. 替換 DashboardPage 為真實業務 widgets(DataTable / Chart / Card 等 DS 元件)
 //   4. 替換 PageHeader rightSlot 的 primary action(若有)
 
-import { useState, type ReactElement } from 'react'
+import { useEffect, useState, type ReactElement } from 'react'
 import {
   AppShell,
   SidebarProvider,
   Sidebar,
   SidebarContent,
-  SidebarFooter,
   SidebarGroup,
   SidebarGroupContent,
   SidebarHeader,
@@ -37,18 +36,13 @@ import {
   ChromeHeader,
   TooltipProvider,
   Avatar,
-  ItemAvatar,
-  DropdownMenu,
-  DropdownMenuTrigger,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuGroup,
 } from '@qijenchen/design-system'
-import { LayoutDashboard, Settings, User, LogOut } from 'lucide-react'
+import { LayoutDashboard } from 'lucide-react'
 import { CATEGORIES } from './data/hr-metrics'
+import { QuarterProvider, useQuarter } from './context/quarter-context'
 import { OverviewPage } from './pages/OverviewPage'
 import { CategoryDetailPage } from './pages/CategoryDetailPage'
+import { HeaderControls } from './components/HeaderControls'
 
 const NAV = [
   { id: 'overview', label: 'Overview', icon: LayoutDashboard },
@@ -85,36 +79,9 @@ function AppSidebar() {
           </SidebarGroupContent>
         </SidebarGroup>
       </SidebarContent>
-      <SidebarFooter>
-        {/* 對齊 DS canonical UserFooter(sidebar.stories.tsx):footer user 行 = 帳號入口,點開帳號選單
-            (DropdownMenu;rule owner = app-shell.spec.md「帳號入口(Account entry)放置 SSOT」——
-            自己的 avatar 不掛 ProfileCard,那是看「別人」的人員卡)。asChild + <button type="button">
-            + data-sidebar="menu-label" 必有,否則 SidebarMenuButton 把 children 全 wrap 進 ItemLabel 視覺垂直 stack */}
-        <SidebarMenu>
-          <SidebarMenuItem>
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <SidebarMenuButton asChild tooltip="當前使用者">
-                  <button type="button" aria-label="帳號與設定">
-                    <ItemAvatar alt="Current user" color="blue" />
-                    <span data-sidebar="menu-label" className="min-w-0 flex-1 truncate">當前使用者</span>
-                  </button>
-                </SidebarMenuButton>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="start" minWidth={280}>
-                <DropdownMenuGroup>
-                  <DropdownMenuLabel>當前使用者</DropdownMenuLabel>
-                  <DropdownMenuItem startIcon={User}>個人資料</DropdownMenuItem>
-                  <DropdownMenuItem startIcon={Settings}>設定</DropdownMenuItem>
-                </DropdownMenuGroup>
-                <DropdownMenuGroup>
-                  <DropdownMenuItem startIcon={LogOut}>登出</DropdownMenuItem>
-                </DropdownMenuGroup>
-              </DropdownMenuContent>
-            </DropdownMenu>
-          </SidebarMenuItem>
-        </SidebarMenu>
-      </SidebarFooter>
+      {/* 帳號入口(Account entry)per user 2026-08-26 directive「登入資訊放頁面 header 右側」,
+          從 SidebarFooter 移至 PageHeader rightSlot 的 <HeaderControls>(AccountMenu)——
+          「帳號入口只能出現一次」per app-shell.spec.md 放置 SSOT,此為刻意的單一移置,非新增。 */}
     </Sidebar>
   )
 }
@@ -149,21 +116,53 @@ function renderPage(activeId: NavId) {
   return <CategoryDetailPage categoryId={activeId} />
 }
 
-export default function App() {
+// @story-baseline: @qijenchen/design-system/components/AppShell/app-shell.stories.tsx#PrimarySidebar
+type Theme = 'light' | 'dark'
+
+function AppContent() {
   const [activeId, setActiveId] = useState<NavId>('overview')
+  const [theme, setTheme] = useState<Theme>('light')
+  const { quarter, setQuarter } = useQuarter()
   const current = NAV.find((n) => n.id === activeId) ?? NAV[0]
+
+  // Light/dark mode(2026-08-26 user directive)——DS token 切換點是 [data-theme] attribute
+  // (見 tokens/color/semantic.css「所有語義 token 用 :root, [data-theme] 定義」),預設 light。
+  useEffect(() => {
+    document.documentElement.dataset.theme = theme
+  }, [theme])
+
+  return (
+    <SidebarProvider activeId={activeId} onActiveChange={(id) => setActiveId(id as NavId)}>
+      <AppShell
+        layout="primary-sidebar"
+        sidebar={<AppSidebar />}
+        header={
+          <PageHeader
+            title={current.label}
+            rightSlot={
+              <HeaderControls
+                quarter={quarter}
+                onQuarterChange={setQuarter}
+                theme={theme}
+                onToggleTheme={() => setTheme((t) => (t === 'light' ? 'dark' : 'light'))}
+              />
+            }
+          />
+        }
+      >
+        {renderPage(activeId)}
+      </AppShell>
+    </SidebarProvider>
+  )
+}
+
+export default function App() {
   // TooltipProvider self-wrap(Storybook story render 跳過 main.tsx → App 必自帶 TooltipProvider context)
   return (
     <TooltipProvider delayDuration={500} skipDelayDuration={300}>
-      <SidebarProvider activeId={activeId} onActiveChange={(id) => setActiveId(id as NavId)}>
-        <AppShell
-          layout="primary-sidebar"
-          sidebar={<AppSidebar />}
-          header={<PageHeader title={current.label} />}
-        >
-          {renderPage(activeId)}
-        </AppShell>
-      </SidebarProvider>
+      <QuarterProvider>
+        <AppContent />
+      </QuarterProvider>
     </TooltipProvider>
   )
 }

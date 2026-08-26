@@ -5,14 +5,14 @@ import {
   ChartTooltipContent,
   type ChartConfig,
 } from '@qijenchen/design-system'
-import type { RETENTION } from '../data/hr-metrics'
+import type { Quarter } from '../data/hr-metrics'
 
 const config = {
   rate: { label: 'Turnover Rate', color: 'var(--chart-1)' },
 } satisfies ChartConfig
 
 interface TurnoverTrendChartProps {
-  quarters: (typeof RETENTION)['quarters']
+  quarters: { quarter: Quarter; rate: number }[]
 }
 
 /** Retention & Turnover — 2026 Q1~Q4 overall turnover rate 折線趨勢。 */
