@@ -128,32 +128,29 @@ const ATTENTION_ITEMS: { id: string; variant: AttentionVariant; title: string; d
   { id: 'er-data', variant: 'error', title: 'Employee Relations data overdue', description: '0% submitted. Due Jul 5.' },
   { id: 'turnover', variant: 'warning', title: 'Voluntary turnover up 3% QoQ', description: 'Top affected: Engineering (8.2%).' },
   { id: 'headcount', variant: 'warning', title: 'Headcount 4% over plan in Engineering', description: 'Review hiring pace against budget.' },
-  { id: 'offer-rate', variant: 'success', title: 'Offer acceptance rate improved to 87%', description: 'Above target.' },
 ]
 
 const ACTIVITY_ROWS = [
-  { id: 'comp', theme: 'Compensation & Benefits', date: 'Jun 30, 2025', uploader: 'M. Lai', employeeNumber: '103482', avatarUrl: 'https://i.pravatar.cc/64?img=47' },
-  { id: 'wfp', theme: 'Workforce Planning', date: 'Jun 30, 2025', uploader: 'R. Wu', employeeNumber: '108217', avatarUrl: 'https://i.pravatar.cc/64?img=12' },
-  { id: 'perf', theme: 'Performance/L&D', date: 'Jun 30, 2025', uploader: 'T. Hsu', employeeNumber: '105690', avatarUrl: 'https://i.pravatar.cc/64?img=33' },
-  { id: 'ta', theme: 'Talent Acquisition', date: 'Jun 28, 2025', uploader: 'J. Kao', employeeNumber: '101933', avatarUrl: 'https://i.pravatar.cc/64?img=68' },
-  { id: 'retain', theme: 'Retention & Turnover', date: 'Jun 28, 2025', uploader: 'S. Fang', employeeNumber: '107456', avatarUrl: 'https://i.pravatar.cc/64?img=5' },
+  { id: 'comp', theme: 'Compensation & Benefits', date: 'Jun 30, 2025', time: '2:14 PM', uploader: 'M. Lai', employeeNumber: '103482', avatarUrl: 'https://i.pravatar.cc/64?img=47' },
+  { id: 'wfp', theme: 'Workforce Planning', date: 'Jun 30, 2025', time: '11:47 AM', uploader: 'R. Wu', employeeNumber: '108217', avatarUrl: 'https://i.pravatar.cc/64?img=12' },
+  { id: 'perf', theme: 'Performance/L&D', date: 'Jun 30, 2025', time: '9:02 AM', uploader: 'T. Hsu', employeeNumber: '105690', avatarUrl: 'https://i.pravatar.cc/64?img=33' },
+  { id: 'ta', theme: 'Talent Acquisition', date: 'Jun 28, 2025', time: '4:38 PM', uploader: 'J. Kao', employeeNumber: '101933', avatarUrl: 'https://i.pravatar.cc/64?img=68' },
+  { id: 'retain', theme: 'Retention & Turnover', date: 'Jun 28, 2025', time: '10:21 AM', uploader: 'S. Fang', employeeNumber: '107456', avatarUrl: 'https://i.pravatar.cc/64?img=5' },
 ]
 
-// Activity row — 3 欄(item / latest update time / uploader),各欄各自留白、不互相擠壓:
+// Activity row — 3 欄(item / upload time / uploader),各欄各自留白、不互相擠壓:
 // 消費 DS Avatar primitive(帶 src 頭像照片)+ buildPersonProfileCard(avatar.spec.md「person avatar
-// hover → ProfileCard」),名字/工號直接顯示(非只靠 hover)。
+// hover → ProfileCard」),icon/姓名/工號橫向展開同一行(非直式堆疊),名字/工號直接顯示(非只靠 hover)。
 // @story-baseline: @qijenchen/design-system/components/PeoplePicker/people-picker.stories.tsx
-function ActivityRow({ theme, date, uploader, employeeNumber, avatarUrl }: { theme: string; date: string; uploader: string; employeeNumber: string; avatarUrl: string }) {
+function ActivityRow({ theme, date, time, uploader, employeeNumber, avatarUrl }: { theme: string; date: string; time: string; uploader: string; employeeNumber: string; avatarUrl: string }) {
   return (
     <div className="grid grid-cols-[1fr_auto_auto] items-center gap-[var(--layout-space-loose)]">
       <span className="text-caption font-bold text-foreground min-w-0 truncate">{theme}</span>
-      <span className="text-caption text-fg-muted tabular-nums whitespace-nowrap">{date}</span>
+      <span className="text-caption text-fg-muted tabular-nums whitespace-nowrap">{date}, {time}</span>
       <div className="flex items-center gap-2">
         <Avatar src={avatarUrl} alt={uploader} size={24} hoverCard={buildPersonProfileCard({ name: uploader, avatarUrl, employeeNumber })} />
-        <div className="flex flex-col items-start leading-tight">
-          <span className="text-caption font-bold text-foreground whitespace-nowrap">{uploader}</span>
-          <span className="text-caption text-fg-muted whitespace-nowrap">{employeeNumber}</span>
-        </div>
+        <span className="text-caption font-bold text-foreground whitespace-nowrap">{uploader}</span>
+        <span className="text-caption text-fg-muted whitespace-nowrap">{employeeNumber}</span>
       </div>
     </div>
   )
@@ -257,7 +254,7 @@ function PageHeader({ period, onPeriodChange }: { period: string; onPeriodChange
 
 function ScoreCard({ children, className = '' }: { children: React.ReactNode; className?: string }) {
   return (
-    <div className={`rounded-lg border border-divider bg-surface p-[var(--layout-space-loose)] ${className}`}>
+    <div className={`rounded-lg border border-divider bg-surface p-[var(--layout-space-tight)] ${className}`}>
       {children}
     </div>
   )
@@ -265,9 +262,9 @@ function ScoreCard({ children, className = '' }: { children: React.ReactNode; cl
 
 function OverviewPage() {
   return (
-    <div className="px-[var(--layout-space-loose)] py-[var(--layout-space-tight)] space-y-[var(--layout-space-loose)]">
+    <div className="px-[var(--layout-space-tight)] py-[var(--layout-space-tight)] space-y-[var(--layout-space-tight)]">
       {/* Row 1: HR Health hero + 6 theme scores */}
-      <section className="grid grid-cols-4 gap-[var(--layout-space-loose)]">
+      <section className="grid grid-cols-4 gap-[var(--layout-space-tight)]">
         <ScoreCard className="row-span-2 flex flex-col items-center justify-center text-center gap-1">
           <div className="text-h1 font-bold text-primary tabular-nums">78</div>
           <div className="text-body font-medium text-fg-secondary">HR Health</div>
@@ -311,17 +308,18 @@ function OverviewPage() {
               </div>
             ))}
           </div>
-          <p className="text-caption text-fg-muted mt-[var(--layout-space-tight)] pt-2.5 border-t border-divider leading-relaxed">
-            Sample data shown for design purposes. Submitter names/IDs are placeholders.
-          </p>
         </ScoreCard>
       </section>
 
-      {/* Row 3: Quarterly Trend + HRPO Insights */}
-      <section className="grid grid-cols-2 gap-[var(--layout-space-loose)] items-start">
-        <ScoreCard>
+      {/* Row 3: Quarterly Trend + HRPO Insights — flex(非 grid)+ 固定高度,子項超出各自捲動,不撐開版面 */}
+      <section className="flex gap-[var(--layout-space-loose)] h-[168px]">
+        <ScoreCard className="flex-1 min-w-0 min-h-0 flex flex-col overflow-hidden">
           <div className="text-body font-bold">Quarterly Trend</div>
-          <ChartContainer config={trendConfig} className="mt-[var(--layout-space-tight)]">
+          {/* @story-baseline: @qijenchen/design-system/components/Chart/chart.stories.tsx#BarChartRevenue */}
+          {/* 卡片高度有限(視窗預算),直接給 ChartContainer 明確高度取代預設 aspect-video —— chart.spec.md
+              「Recharts ResponsiveContainer 需 parent 有高度,不給 fallback 會坍塌」,明確高度即滿足此前提,
+              不透過 AspectRatio 包裝(該組合未見於任何現有 consumer,經測試在固定高度 flex 卡片內不穩定) */}
+          <ChartContainer config={trendConfig} className="flex-1 min-h-0 mt-[var(--layout-space-tight)]">
             <BarChart accessibilityLayer data={trendData}>
               <CartesianGrid vertical={false} />
               <XAxis dataKey="quarter" tickLine={false} axisLine={false} tickMargin={8} />
@@ -330,14 +328,15 @@ function OverviewPage() {
               <Bar dataKey="score" fill="var(--color-score)" radius={4} />
             </BarChart>
           </ChartContainer>
-          <p className="text-center text-caption text-fg-muted mt-2">Overall HR Health Score Trend</p>
         </ScoreCard>
 
-        <ScoreCard>
+        <ScoreCard className="flex-1 min-w-0 min-h-0 flex flex-col">
           <div className="text-body font-bold">HRPO Insights</div>
-          <div className="flex flex-col gap-2.5 mt-[var(--layout-space-tight)]">
+          {/* @story-baseline: @qijenchen/design-system/components/ScrollArea/scroll-area.stories.tsx */}
+          <ScrollArea className="flex-1 min-h-0 mt-[var(--layout-space-tight)]">
+          <div className="flex flex-col gap-2">
             {INSIGHTS.map((insight) => (
-              <div key={insight.id} className="flex gap-2 rounded-r-md border-l-[3px] border-primary bg-primary-subtle p-2.5">
+              <div key={insight.id} className="flex gap-2 rounded-r-md border-l-[3px] border-primary bg-primary-subtle p-2">
                 <Pin size={13} className="mt-0.5 flex-none text-primary" />
                 <p className="text-caption text-foreground leading-relaxed m-0">
                   {insight.text}
@@ -346,6 +345,7 @@ function OverviewPage() {
               </div>
             ))}
           </div>
+          </ScrollArea>
         </ScoreCard>
       </section>
     </div>
