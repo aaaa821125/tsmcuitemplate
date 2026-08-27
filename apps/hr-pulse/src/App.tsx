@@ -113,10 +113,10 @@ function DeltaLabel({ delta }: { delta: Delta }) {
 
 // ── Overview: Turnover rate(折線,三系列)+ Hiring gap(長條)── 皆為 2026 假數字,待接真實資料源。
 const TURNOVER_TREND = [
-  { quarter: '2026 Q1', turnoverRate: 8.2, regrettable: 4.5, voluntary: 6.8 },
-  { quarter: '2026 Q2', turnoverRate: 7.6, regrettable: 4.1, voluntary: 6.2 },
-  { quarter: '2026 Q3', turnoverRate: 8.9, regrettable: 5.0, voluntary: 7.1 },
-  { quarter: '2026 Q4', turnoverRate: 7.2, regrettable: 3.8, voluntary: 5.9 },
+  { quarter: '2026 Q1', turnoverRate: 7.2, voluntary: 5.6, regrettable: 4.0 },
+  { quarter: '2026 Q2', turnoverRate: 6.8, voluntary: 5.2, regrettable: 3.6 },
+  { quarter: '2026 Q3', turnoverRate: 7.6, voluntary: 5.9, regrettable: 4.3 },
+  { quarter: '2026 Q4', turnoverRate: 6.5, voluntary: 4.8, regrettable: 3.4 },
 ]
 const turnoverConfig = {
   turnoverRate: { label: 'Turnover rate', color: 'var(--chart-1)' },
