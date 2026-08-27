@@ -60,6 +60,9 @@ import {
   type ChartConfig,
   DescriptionList,
   DescriptionItem,
+  Tooltip,
+  TooltipTrigger,
+  TooltipContent,
 } from '@qijenchen/design-system'
 import {
   LayoutDashboard,
@@ -76,6 +79,7 @@ import {
   TrendingDown,
   Minus,
   Pin,
+  Info,
 } from 'lucide-react'
 
 const NAV = [
@@ -111,6 +115,24 @@ function DeltaLabel({ delta }: { delta: Delta }) {
   )
 }
 
+// 卡片標題旁的「上次更新」提示 —— hover icon 才顯示時間,不佔用標題列空間。
+// @story-baseline: @qijenchen/design-system/components/Tooltip/tooltip.stories.tsx
+function CardTitleWithUpdated({ title, updatedAt }: { title: string; updatedAt: string }) {
+  return (
+    <div className="flex items-center gap-1">
+      <span className="text-body font-bold">{title}</span>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <span className="inline-flex items-center text-fg-muted cursor-default" aria-label={`Last updated ${updatedAt}`}>
+            <Info size={14} />
+          </span>
+        </TooltipTrigger>
+        <TooltipContent>Last updated: {updatedAt}</TooltipContent>
+      </Tooltip>
+    </div>
+  )
+}
+
 // ── Overview: Turnover rate(折線,三系列)+ Hiring gap(長條)── 皆為 2026 假數字,待接真實資料源。
 const TURNOVER_TREND = [
   { quarter: '2026 Q1', turnoverRate: 7.2, voluntary: 5.6, regrettable: 4.0 },
@@ -142,6 +164,30 @@ const INSIGHTS = [
   { id: 'briefing', text: 'Q2 Briefing Pack is ready for review. Key highlights: hiring efficiency improved, engagement stable, performance review completion lagging.', source: 'HRPO Analysis Team, Jun 30, 2026' },
   { id: 'hiring-gap', text: 'Hiring gap narrowed to 12% in Q4 2026 after two quarters of improvement — driven by faster time-to-fill in R&D.', source: 'HRPO Analysis Team, Dec 31, 2026' },
 ]
+
+// 5 張 key information 小卡(等寬),放在 Turnover rate / Hiring gap 之下、HRPO Insights 之上。皆為假數字。
+const KEY_INFO_CARDS: { id: string; title: string; subtitle?: string; value: string; delta: Delta; deltaSuffix: string }[] = [
+  { id: 'new-hire-engagement', title: 'New Hire Engagement', subtitle: 'Wecare Survey', value: '40%', delta: { direction: 'up', text: '+2%' }, deltaSuffix: 'vs 2026Q3' },
+  { id: 'internal-mobility', title: 'Internal Mobility', value: '40%', delta: { direction: 'up', text: '+5%' }, deltaSuffix: 'vs 14 days ago' },
+  { id: 'new-hire-engagement-2', title: 'New Hire Engagement', subtitle: 'Wecare Survey', value: '80%', delta: { direction: 'down', text: '-5%' }, deltaSuffix: 'vs 2026Q3' },
+  { id: 'manager-fulfillment-gap', title: 'Manager Fulfillment Gap', value: '12%', delta: { direction: 'up', text: '+0.8%' }, deltaSuffix: 'vs 2026Q3' },
+  { id: 'local-manager-representation', title: 'Local Manager Representation', value: '50%', delta: { direction: 'up', text: '+2%' }, deltaSuffix: 'vs 2026Q3' },
+]
+
+function KeyInfoCard({ card }: { card: (typeof KEY_INFO_CARDS)[number] }) {
+  return (
+    <ScoreCard className="flex flex-col">
+      <div className="text-caption font-medium text-fg-secondary">{card.title}</div>
+      {card.subtitle && <div className="text-caption text-fg-muted">{card.subtitle}</div>}
+      {/* 數字至少 32px(text-h2 token = 32px,designer guideline 下限) */}
+      <div className="text-h2 font-bold tabular-nums mt-[var(--layout-space-tight)]">{card.value}</div>
+      <div className="mt-1">
+        <DeltaLabel delta={card.delta} />
+        <span className="text-caption text-fg-muted"> {card.deltaSuffix}</span>
+      </div>
+    </ScoreCard>
+  )
+}
 
 type PillarId = 'talent' | 'leadership' | 'culture' | 'engagement' | 'globalization'
 
@@ -309,7 +355,7 @@ function OverviewPage() {
       {/* Row 1: Turnover rate(折線,三系列)+ Hiring gap(長條)— 橫向兩張卡 */}
       <section className="flex gap-[var(--layout-space-loose)] h-[280px]">
         <ScoreCard className="flex-1 min-w-0 min-h-0 flex flex-col overflow-hidden">
-          <div className="text-body font-bold">Turnover rate</div>
+          <CardTitleWithUpdated title="Turnover rate" updatedAt="Dec 31, 2026, 6:00 AM" />
           <ChartContainer config={turnoverConfig} className="flex-1 min-h-0 mt-[var(--layout-space-tight)]">
             <LineChart accessibilityLayer data={TURNOVER_TREND}>
               <CartesianGrid vertical={false} />
@@ -325,8 +371,8 @@ function OverviewPage() {
         </ScoreCard>
 
         <ScoreCard className="flex-1 min-w-0 min-h-0 flex flex-col overflow-hidden">
-          <div className="flex items-baseline gap-2">
-            <span className="text-body font-bold">Hiring gap</span>
+          <div className="flex items-baseline gap-[var(--layout-space-tight)]">
+            <CardTitleWithUpdated title="Hiring gap" updatedAt="Dec 31, 2026, 6:00 AM" />
             <span className="text-h3 font-bold text-primary tabular-nums">{HIRING_GAP_HEADLINE}</span>
           </div>
           <ChartContainer config={hiringGapConfig} className="flex-1 min-h-0 mt-[var(--layout-space-tight)]">
@@ -341,7 +387,14 @@ function OverviewPage() {
         </ScoreCard>
       </section>
 
-      {/* Row 2: HRPO Insights — 拿掉 Attention Required / Recent Data Updates 後拉上來,給足空間 */}
+      {/* Row 2: 5 張 key information 小卡,等寬 */}
+      <section className="grid grid-cols-5 gap-[var(--layout-space-loose)]">
+        {KEY_INFO_CARDS.map((card) => (
+          <KeyInfoCard key={card.id} card={card} />
+        ))}
+      </section>
+
+      {/* Row 3: HRPO Insights — 拿掉 Attention Required / Recent Data Updates 後拉上來,給足空間 */}
       <ScoreCard>
         <div className="text-body font-bold">HRPO Insights</div>
         <div className="flex flex-col gap-2 mt-[var(--layout-space-tight)]">
