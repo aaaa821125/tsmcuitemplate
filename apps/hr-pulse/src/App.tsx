@@ -156,7 +156,6 @@ const HIRING_GAP_TREND = [
 const hiringGapConfig = {
   gap: { label: 'Hiring gap', color: 'var(--chart-1)' },
 } satisfies ChartConfig
-const HIRING_GAP_HEADLINE = '12%'
 
 // 統一時間格式:`<來源>, YYYY/MM/DD`(對齊 DS DatePicker 預設格式 —— date-picker.tsx:37
 // 「Default format:YYYY/MM/DD,year-first ISO-like,locale-independent」,非隨意 MMM D, YYYY)。
@@ -377,10 +376,7 @@ function OverviewPage() {
         </ScoreCard>
 
         <ScoreCard className="flex-1 min-w-0 min-h-0 flex flex-col overflow-hidden">
-          <div className="flex items-baseline gap-[var(--layout-space-tight)]">
-            <CardTitleWithUpdated title="Hiring gap" updatedAt="2026/08/26 06:00" />
-            <span className="text-h3 font-bold text-primary tabular-nums">{HIRING_GAP_HEADLINE}</span>
-          </div>
+          <CardTitleWithUpdated title="Hiring Gap" updatedAt="2026/08/26 06:00" />
           <ChartContainer config={hiringGapConfig} className="flex-1 min-h-0 mt-[var(--layout-space-tight)]">
             <BarChart accessibilityLayer data={HIRING_GAP_TREND}>
               <CartesianGrid vertical={false} />
