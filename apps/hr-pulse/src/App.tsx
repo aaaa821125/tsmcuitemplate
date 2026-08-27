@@ -167,12 +167,12 @@ const INSIGHTS = [
 ]
 
 // 5 張 key information 小卡(等寬),放在 Turnover rate / Hiring gap 之下、HRPO Insights 之上。皆為假數字。
-const KEY_INFO_CARDS: { id: string; title: string; subtitle?: string; value: string; delta: Delta; deltaSuffix: string }[] = [
-  { id: 'new-hire-engagement', title: 'New Hire Engagement', subtitle: 'Wecare Survey', value: '40%', delta: { direction: 'up', text: '+2%' }, deltaSuffix: 'vs 2026Q3' },
-  { id: 'internal-mobility', title: 'Internal Mobility', value: '40%', delta: { direction: 'up', text: '+5%' }, deltaSuffix: 'vs 14 days ago' },
-  { id: 'new-hire-engagement-2', title: 'New Hire Engagement', subtitle: 'Wecare Survey', value: '80%', delta: { direction: 'down', text: '-5%' }, deltaSuffix: 'vs 2026Q3' },
-  { id: 'manager-fulfillment-gap', title: 'Manager Fulfillment Gap', value: '12%', delta: { direction: 'up', text: '+0.8%' }, deltaSuffix: 'vs 2026Q3' },
-  { id: 'local-manager-representation', title: 'Local Manager Representation', value: '50%', delta: { direction: 'up', text: '+2%' }, deltaSuffix: 'vs 2026Q3' },
+const KEY_INFO_CARDS: { id: string; title: string; subtitle?: string; value: string; delta: Delta; deltaSuffix: string; updatedAt: string }[] = [
+  { id: 'new-hire-engagement', title: 'New Hire Performance', subtitle: 'Wecare Survey', value: '40%', delta: { direction: 'up', text: '+2%' }, deltaSuffix: 'vs 2026Q3', updatedAt: '2026/08/26 06:00' },
+  { id: 'internal-mobility', title: 'Internal Mobility', value: '40%', delta: { direction: 'up', text: '+5%' }, deltaSuffix: 'vs 14 days ago', updatedAt: '2026/08/26 06:00' },
+  { id: 'new-hire-engagement-2', title: 'New Hire Engagement', subtitle: 'Wecare Survey', value: '80%', delta: { direction: 'down', text: '-5%' }, deltaSuffix: 'vs 2026Q3', updatedAt: '2026/08/26 06:00' },
+  { id: 'manager-fulfillment-gap', title: 'Manager Fulfillment Gap', value: '12%', delta: { direction: 'up', text: '+0.8%' }, deltaSuffix: 'vs 2026Q3', updatedAt: '2026/08/26 06:00' },
+  { id: 'local-manager-representation', title: 'Local Manager Representation', value: '50%', delta: { direction: 'up', text: '+2%' }, deltaSuffix: 'vs 2026Q3', updatedAt: '2026/08/26 06:00' },
 ]
 
 function KeyInfoCard({ card }: { card: (typeof KEY_INFO_CARDS)[number] }) {
@@ -181,7 +181,23 @@ function KeyInfoCard({ card }: { card: (typeof KEY_INFO_CARDS)[number] }) {
       {/* Large/500,16/150(text-body-lg font-medium token)+ 加深至 text-foreground(對齊 designer 要求「黑一點」)。
           固定保留 2 行高度(不論標題實際幾行),避免長標題(如 Local Manager Representation)換行撐開、
           導致下方數字跟別張卡片高度對不齊 —— 對齊 designer 要求「數字高度對齊,不要上上下下的」。 */}
-      <div className="text-body-lg font-medium text-foreground min-h-[3rem]">{card.title}</div>
+      {/* @story-baseline: @qijenchen/design-system/components/Tooltip/tooltip.stories.tsx#Default —
+          hover Info icon 顯示假的最後更新時間,對齊 Turnover rate/Hiring Gap 卡片已用的同一 Tooltip pattern */}
+      {/* @layout-space-magic-ok: min-h-[3rem] 是固定 2 行標題高度預留(非 spacing/gap),延續本檔既有 designer 對齊需求 */}
+      <div className="flex items-start gap-1 min-h-[3rem]">
+        <span className="text-body-lg font-medium text-foreground">{card.title}</span>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <span
+              className="inline-flex items-center text-fg-muted cursor-default flex-none"
+              aria-label={`Last updated ${card.updatedAt}`}
+            >
+              <Info size={14} />
+            </span>
+          </TooltipTrigger>
+          <TooltipContent>Last updated: {card.updatedAt}</TooltipContent>
+        </Tooltip>
+      </div>
       {/* subtitle 固定佔一行高度(有內容顯示、無內容 invisible 佔位),讓所有卡片的數字 baseline 對齊,不因有無 subtitle 上下飄移 */}
       <div className={`text-caption text-fg-muted ${card.subtitle ? '' : 'invisible'}`}>{card.subtitle || ' '}</div>
       {/* 數字至少 32px(text-h2 token = 32px,designer guideline 下限) */}
