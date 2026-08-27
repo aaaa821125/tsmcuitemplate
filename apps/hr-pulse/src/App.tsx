@@ -167,10 +167,10 @@ const INSIGHTS = [
 ]
 
 // 5 張 key information 小卡(等寬),放在 Turnover rate / Hiring gap 之下、HRPO Insights 之上。皆為假數字。
-const KEY_INFO_CARDS: { id: string; title: string; subtitle?: string; value: string; delta: Delta; deltaSuffix: string; updatedAt: string }[] = [
-  { id: 'new-hire-engagement', title: 'New Hire Performance', subtitle: 'Wecare Survey', value: '40%', delta: { direction: 'up', text: '+2%' }, deltaSuffix: 'vs 2026Q3', updatedAt: '2026/08/26 06:00' },
+const KEY_INFO_CARDS: { id: string; title: string; value: string; delta: Delta; deltaSuffix: string; updatedAt: string }[] = [
+  { id: 'new-hire-engagement', title: 'New Hire Performance (Wecare Survey)', value: '40%', delta: { direction: 'up', text: '+2%' }, deltaSuffix: 'vs 2026Q3', updatedAt: '2026/08/26 06:00' },
   { id: 'internal-mobility', title: 'Internal Mobility', value: '40%', delta: { direction: 'up', text: '+5%' }, deltaSuffix: 'vs 14 days ago', updatedAt: '2026/08/26 06:00' },
-  { id: 'new-hire-engagement-2', title: 'New Hire Engagement', subtitle: 'Wecare Survey', value: '80%', delta: { direction: 'down', text: '-5%' }, deltaSuffix: 'vs 2026Q3', updatedAt: '2026/08/26 06:00' },
+  { id: 'new-hire-engagement-2', title: 'New Hire Engagement (Wecare Survey)', value: '80%', delta: { direction: 'down', text: '-5%' }, deltaSuffix: 'vs 2026Q3', updatedAt: '2026/08/26 06:00' },
   { id: 'manager-fulfillment-gap', title: 'Manager Fulfillment Gap', value: '12%', delta: { direction: 'up', text: '+0.8%' }, deltaSuffix: 'vs 2026Q3', updatedAt: '2026/08/26 06:00' },
   { id: 'local-manager-representation', title: 'Local Manager Representation', value: '50%', delta: { direction: 'up', text: '+2%' }, deltaSuffix: 'vs 2026Q3', updatedAt: '2026/08/26 06:00' },
 ]
@@ -198,8 +198,6 @@ function KeyInfoCard({ card }: { card: (typeof KEY_INFO_CARDS)[number] }) {
           <TooltipContent>Last updated: {card.updatedAt}</TooltipContent>
         </Tooltip>
       </div>
-      {/* subtitle 固定佔一行高度(有內容顯示、無內容 invisible 佔位),讓所有卡片的數字 baseline 對齊,不因有無 subtitle 上下飄移 */}
-      <div className={`text-caption text-fg-muted ${card.subtitle ? '' : 'invisible'}`}>{card.subtitle || ' '}</div>
       {/* 數字至少 32px(text-h2 token = 32px,designer guideline 下限) */}
       <div className="text-h2 font-bold tabular-nums mt-[var(--layout-space-tight)]">{card.value}</div>
       <div className="mt-1">
