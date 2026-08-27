@@ -120,7 +120,8 @@ function DeltaLabel({ delta }: { delta: Delta }) {
 function CardTitleWithUpdated({ title, updatedAt }: { title: string; updatedAt: string }) {
   return (
     <div className="flex items-center gap-1">
-      <span className="text-body font-bold">{title}</span>
+      {/* 24/130(text-h3 token)—— 對齊 designer 指定字級/行高級距 */}
+      <span className="text-h3 font-bold">{title}</span>
       <Tooltip>
         <TooltipTrigger asChild>
           <span className="inline-flex items-center text-fg-muted cursor-default" aria-label={`Last updated ${updatedAt}`}>
@@ -157,12 +158,13 @@ const hiringGapConfig = {
 } satisfies ChartConfig
 const HIRING_GAP_HEADLINE = '12%'
 
-// 統一時間格式:`<來源>, MMM D, YYYY`(對齊 Recent Data Updates 既有 date 慣例),
-// 年份跟 Overview 圖表現行期間(2026)一致,不留 2025 舊年份殘留。
+// 統一時間格式:`<來源>, YYYY/MM/DD`(對齊 DS DatePicker 預設格式 —— date-picker.tsx:37
+// 「Default format:YYYY/MM/DD,year-first ISO-like,locale-independent」,非隨意 MMM D, YYYY)。
+// 依時間新→舊排序,最新一則在最上面。
 const INSIGHTS = [
-  { id: 'eng-turnover', text: 'Engineering turnover correlates strongly with market comp gap. Recommend targeted retention package for critical tech roles.', source: 'HRPO Analysis Team, Jun 28, 2026' },
-  { id: 'briefing', text: 'Q2 Briefing Pack is ready for review. Key highlights: hiring efficiency improved, engagement stable, performance review completion lagging.', source: 'HRPO Analysis Team, Jun 30, 2026' },
-  { id: 'hiring-gap', text: 'Hiring gap narrowed to 12% in Q4 2026 after two quarters of improvement — driven by faster time-to-fill in R&D.', source: 'HRPO Analysis Team, Dec 31, 2026' },
+  { id: 'hiring-gap', text: 'Hiring gap narrowed to 12% in Q4 2026 after two quarters of improvement — driven by faster time-to-fill in R&D.', source: 'HRPO Analysis Team, 2026/12/31' },
+  { id: 'briefing', text: 'Q2 Briefing Pack is ready for review. Key highlights: hiring efficiency improved, engagement stable, performance review completion lagging.', source: 'HRPO Analysis Team, 2026/06/30' },
+  { id: 'eng-turnover', text: 'Engineering turnover correlates strongly with market comp gap. Recommend targeted retention package for critical tech roles.', source: 'HRPO Analysis Team, 2026/06/28' },
 ]
 
 // 5 張 key information 小卡(等寬),放在 Turnover rate / Hiring gap 之下、HRPO Insights 之上。皆為假數字。
@@ -177,8 +179,12 @@ const KEY_INFO_CARDS: { id: string; title: string; subtitle?: string; value: str
 function KeyInfoCard({ card }: { card: (typeof KEY_INFO_CARDS)[number] }) {
   return (
     <ScoreCard className="flex flex-col">
-      <div className="text-caption font-medium text-fg-secondary">{card.title}</div>
-      {card.subtitle && <div className="text-caption text-fg-muted">{card.subtitle}</div>}
+      {/* Large/500,16/150(text-body-lg font-medium token)+ 加深至 text-foreground(對齊 designer 要求「黑一點」)。
+          固定保留 2 行高度(不論標題實際幾行),避免長標題(如 Local Manager Representation)換行撐開、
+          導致下方數字跟別張卡片高度對不齊 —— 對齊 designer 要求「數字高度對齊,不要上上下下的」。 */}
+      <div className="text-body-lg font-medium text-foreground min-h-[3rem]">{card.title}</div>
+      {/* subtitle 固定佔一行高度(有內容顯示、無內容 invisible 佔位),讓所有卡片的數字 baseline 對齊,不因有無 subtitle 上下飄移 */}
+      <div className={`text-caption text-fg-muted ${card.subtitle ? '' : 'invisible'}`}>{card.subtitle || ' '}</div>
       {/* 數字至少 32px(text-h2 token = 32px,designer guideline 下限) */}
       <div className="text-h2 font-bold tabular-nums mt-[var(--layout-space-tight)]">{card.value}</div>
       <div className="mt-1">
@@ -355,7 +361,7 @@ function OverviewPage() {
       {/* Row 1: Turnover rate(折線,三系列)+ Hiring gap(長條)— 橫向兩張卡 */}
       <section className="flex gap-[var(--layout-space-loose)] h-[280px]">
         <ScoreCard className="flex-1 min-w-0 min-h-0 flex flex-col overflow-hidden">
-          <CardTitleWithUpdated title="Turnover rate" updatedAt="Dec 31, 2026, 6:00 AM" />
+          <CardTitleWithUpdated title="Turnover rate" updatedAt="2026/08/26 06:00" />
           <ChartContainer config={turnoverConfig} className="flex-1 min-h-0 mt-[var(--layout-space-tight)]">
             <LineChart accessibilityLayer data={TURNOVER_TREND}>
               <CartesianGrid vertical={false} />
@@ -372,7 +378,7 @@ function OverviewPage() {
 
         <ScoreCard className="flex-1 min-w-0 min-h-0 flex flex-col overflow-hidden">
           <div className="flex items-baseline gap-[var(--layout-space-tight)]">
-            <CardTitleWithUpdated title="Hiring gap" updatedAt="Dec 31, 2026, 6:00 AM" />
+            <CardTitleWithUpdated title="Hiring gap" updatedAt="2026/08/26 06:00" />
             <span className="text-h3 font-bold text-primary tabular-nums">{HIRING_GAP_HEADLINE}</span>
           </div>
           <ChartContainer config={hiringGapConfig} className="flex-1 min-h-0 mt-[var(--layout-space-tight)]">
