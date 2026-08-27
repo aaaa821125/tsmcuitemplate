@@ -135,10 +135,12 @@ const hiringGapConfig = {
 } satisfies ChartConfig
 const HIRING_GAP_HEADLINE = '12%'
 
+// 統一時間格式:`<來源>, MMM D, YYYY`(對齊 Recent Data Updates 既有 date 慣例),
+// 年份跟 Overview 圖表現行期間(2026)一致,不留 2025 舊年份殘留。
 const INSIGHTS = [
-  { id: 'eng-turnover', text: 'Engineering turnover correlates strongly with market comp gap. Recommend targeted retention package for critical tech roles.', source: 'HRPO Analysis Team, Jun 28, 2025' },
-  { id: 'briefing', text: 'Q2 Briefing Pack is ready for review. Key highlights: hiring efficiency improved, engagement stable, performance review completion lagging.', source: 'HRPO, Jun 30, 2025' },
-  { id: 'hiring-gap', text: 'Hiring gap narrowed to 12% in Q4 2026 after two quarters of improvement — driven by faster time-to-fill in R&D.', source: 'HRPO Analysis Team, 2026 Q4' },
+  { id: 'eng-turnover', text: 'Engineering turnover correlates strongly with market comp gap. Recommend targeted retention package for critical tech roles.', source: 'HRPO Analysis Team, Jun 28, 2026' },
+  { id: 'briefing', text: 'Q2 Briefing Pack is ready for review. Key highlights: hiring efficiency improved, engagement stable, performance review completion lagging.', source: 'HRPO Analysis Team, Jun 30, 2026' },
+  { id: 'hiring-gap', text: 'Hiring gap narrowed to 12% in Q4 2026 after two quarters of improvement — driven by faster time-to-fill in R&D.', source: 'HRPO Analysis Team, Dec 31, 2026' },
 ]
 
 type PillarId = 'talent' | 'leadership' | 'culture' | 'engagement' | 'globalization'
