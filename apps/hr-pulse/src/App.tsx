@@ -176,12 +176,12 @@ const HIRING_GAP_TREND: HiringGapRow[] = [
   { quarter: '2026 Q3', dlBudget: 18900, dlApproved: 18750, dlGap: 150, idlBudget: 3000, idlApproved: 2880, idlGap: 120 },
   { quarter: '2026 Q4', dlBudget: 19200, dlApproved: 18800, dlGap: 400, idlBudget: 3080, idlApproved: 2980, idlGap: 100 },
 ]
-// 2026-08-28 user 反饋原紫/藍配色不好看 → 換一組色相對比更清楚的 categorical 色(indigo/turquoise)。
+// 2026-08-28 user 指定改回原本紫/藍配色。
 const hiringGapConfig = {
-  dlApproved: { label: 'DL Approved', color: 'var(--color-indigo-6)' },
-  dlGap: { label: 'DL Gap', color: 'var(--color-indigo-3)' },
-  idlApproved: { label: 'IDL Approved', color: 'var(--color-turquoise-6)' },
-  idlGap: { label: 'IDL Gap', color: 'var(--color-turquoise-3)' },
+  dlApproved: { label: 'DL Approved', color: 'var(--color-purple-6)' },
+  dlGap: { label: 'DL Gap', color: 'var(--color-purple-3)' },
+  idlApproved: { label: 'IDL Approved', color: 'var(--color-blue-6)' },
+  idlGap: { label: 'IDL Gap', color: 'var(--color-blue-3)' },
 } satisfies ChartConfig
 
 // Hover-only detail(Budget/Approved/Gap + %)—— 长条本身只标 +Gap 註記,保持畫面整潔(對齊 user 指示)。
@@ -465,18 +465,23 @@ function OverviewPage() {
           <CardTitleWithUpdated title="Hiring Gap" updatedAt="2026/08/26 06:00" />
           {/* 標題與圖表間距拉開至 16px(loose token,對齊 designer 規範下限)。
               @story-baseline: @qijenchen/design-system/components/Chart/chart.stories.tsx#BarChartRevenue —
-              DL/IDL 兩條 stacked bar(Approved 深 + Gap 淺),margin.top 為圖表 SVG 座標數值(非 Tailwind spacing class,不受 layout-space 規則約束),留白給長條上方 +Gap 註記。 */}
+              DL/IDL 兩條 stacked bar(Approved 深 + Gap 淺),margin.top 為圖表 SVG 座標數值(非 Tailwind spacing class,不受 layout-space 規則約束),留白給長條上方 +Gap 註記。
+              單一 Y 軸,起始 10,000、每格 5,000(user 指定)—— IDL 總數(~3,000)低於 10,000 起始值,IDL 長條在此設定下會不可見。 */}
           <ChartContainer config={hiringGapConfig} className="flex-1 min-h-0 mt-[var(--layout-space-loose)]">
             <BarChart accessibilityLayer data={HIRING_GAP_TREND} margin={{ top: 28 }}>
               <CartesianGrid vertical={false} />
               <XAxis dataKey="quarter" tickLine={false} axisLine={false} tickMargin={8} />
-              {/* DL(~20k)/IDL(~3k)量級差太多,共用一條 Y 軸會讓 IDL 長條被壓在底部看不清楚 —— 拆成左右兩條獨立 Y 軸,
-                  各自 auto-scale 到自己的數值範圍(仍從 0 起算,不砍基線 —— 長條圖砍基線會扭曲視覺比例,不誠實)。 */}
-              <YAxis yAxisId="dl" tickLine={false} axisLine={false} width={52} tickFormatter={(v: number) => v.toLocaleString()} />
-              <YAxis yAxisId="idl" orientation="right" tickLine={false} axisLine={false} width={44} tickFormatter={(v: number) => v.toLocaleString()} />
+              <YAxis
+                tickLine={false}
+                axisLine={false}
+                width={52}
+                domain={[10000, 25000]}
+                ticks={[10000, 15000, 20000, 25000]}
+                tickFormatter={(v: number) => v.toLocaleString()}
+              />
               <ChartTooltip content={<ChartTooltipContent formatter={hiringGapTooltipFormatter} />} />
-              <Bar yAxisId="dl" dataKey="dlApproved" stackId="dl" fill="var(--color-dlApproved)" radius={2} />
-              <Bar yAxisId="dl" dataKey="dlGap" stackId="dl" fill="var(--color-dlGap)" radius={2}>
+              <Bar dataKey="dlApproved" stackId="dl" fill="var(--color-dlApproved)" radius={2} />
+              <Bar dataKey="dlGap" stackId="dl" fill="var(--color-dlGap)" radius={2}>
                 <LabelList
                   dataKey="dlGap"
                   position="top"
@@ -485,8 +490,8 @@ function OverviewPage() {
                   style={{ fill: 'var(--fg-secondary)' }}
                 />
               </Bar>
-              <Bar yAxisId="idl" dataKey="idlApproved" stackId="idl" fill="var(--color-idlApproved)" radius={2} />
-              <Bar yAxisId="idl" dataKey="idlGap" stackId="idl" fill="var(--color-idlGap)" radius={2}>
+              <Bar dataKey="idlApproved" stackId="idl" fill="var(--color-idlApproved)" radius={2} />
+              <Bar dataKey="idlGap" stackId="idl" fill="var(--color-idlGap)" radius={2}>
                 <LabelList
                   dataKey="idlGap"
                   position="top"
