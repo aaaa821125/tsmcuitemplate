@@ -79,8 +79,11 @@ import {
   TrendingUp,
   TrendingDown,
   Minus,
+  ArrowUp,
+  ArrowDown,
   Pin,
   Info,
+  Square,
 } from 'lucide-react'
 
 const NAV = [
@@ -120,11 +123,15 @@ function DeltaLabel({ delta }: { delta: Delta }) {
 // 用最接近的實際 prop 對應:正數 color="green"、負數 color="amber"〈淺橘,淺底深字〉,預設 subtle(非
 // solid)+ size="sm"。icon 沿用 DeltaLabel 同一組方向 icon。
 // @story-baseline: @qijenchen/design-system/components/Tag/tag.stories.tsx
+// 2026-08-28 user 澄清:數值上升 = ArrowUp、數值下降 = ArrowDown(最基本箭頭,非 Trending 系列 icon)。
+// DS Tag 無 outline/border 變體(見 tag.spec.md,只有 color/solid/size)——用 className 疊加同色相 border 色
+// 模擬「outlined」視覺(蓋掉 Tag base class 的 border-transparent)。
 function KeyInfoDeltaTag({ delta }: { delta: Delta }) {
-  const Icon = delta.direction === 'up' ? TrendingUp : delta.direction === 'down' ? TrendingDown : Minus
+  const Icon = delta.direction === 'up' ? ArrowUp : delta.direction === 'down' ? ArrowDown : Minus
   const color = delta.direction === 'up' ? 'green' : delta.direction === 'down' ? 'amber' : 'neutral'
+  const borderClass = color === 'green' ? 'border-[var(--color-green-6)]' : 'border-[var(--color-amber-6)]'
   return (
-    <Tag color={color} size="sm" icon={Icon}>
+    <Tag color={color} size="sm" icon={Icon} className={borderClass}>
       {delta.text}
     </Tag>
   )
@@ -177,12 +184,12 @@ const HIRING_GAP_TREND: HiringGapRow[] = [
   { quarter: '2026 Q3', dlBudget: 18900, dlApproved: 18750, dlGap: 150, idlBudget: 17800, idlApproved: 17600, idlGap: 200 },
   { quarter: '2026 Q4', dlBudget: 19200, dlApproved: 18800, dlGap: 400, idlBudget: 18000, idlApproved: 17700, idlGap: 300 },
 ]
-// 2026-08-28 user 指定改回原本紫/藍配色。
+// 2026-08-28 user 指定改回原本紫/藍配色;IDL 排最前面(順序帶動長條左右排列 + legend 順序)。
 const hiringGapConfig = {
-  dlApproved: { label: 'DL Approved', color: 'var(--color-purple-6)' },
-  dlGap: { label: 'DL Gap', color: 'var(--color-purple-3)' },
   idlApproved: { label: 'IDL Approved', color: 'var(--color-blue-6)' },
   idlGap: { label: 'IDL Gap', color: 'var(--color-blue-3)' },
+  dlApproved: { label: 'DL Approved', color: 'var(--color-purple-6)' },
+  dlGap: { label: 'DL Gap', color: 'var(--color-purple-3)' },
 } satisfies ChartConfig
 
 // Hover-only detail(Budget/Approved/Gap + %)—— 长条本身只标 +Gap 註記,保持畫面整潔(對齊 user 指示)。
@@ -208,12 +215,13 @@ function hiringGapTooltipFormatter(value: unknown, _name: unknown, item: { dataK
     )
   }
 
-  const pct = ((Number(value) / budget) * 100).toFixed(1)
+  const gapValue = Number(value)
+  const pct = ((gapValue / budget) * 100).toFixed(1)
   return (
     <div className="flex w-full flex-1 justify-between gap-[var(--layout-space-tight)]">
       <span className="text-fg-secondary">{hiringGapConfig[key].label}</span>
       <span className="text-foreground font-mono font-medium tabular-nums">
-        {Number(value).toLocaleString()} ({pct}%)
+        {gapValue > 0 ? `+${gapValue.toLocaleString()}` : gapValue.toLocaleString()} ({pct}%)
       </span>
     </div>
   )
@@ -466,31 +474,25 @@ function OverviewPage() {
           <CardTitleWithUpdated title="Hiring Gap" updatedAt="2026/08/26 06:00" />
           {/* 標題與圖表間距拉開至 16px(loose token,對齊 designer 規範下限)。
               @story-baseline: @qijenchen/design-system/components/Chart/chart.stories.tsx#BarChartRevenue —
-              DL/IDL 兩條 stacked bar(Approved 深 + Gap 淺),margin.top 為圖表 SVG 座標數值(非 Tailwind spacing class,不受 layout-space 規則約束),留白給長條上方 +Gap 註記。
-              單一 Y 軸,起始 10,000、每格 5,000(user 指定)—— IDL 總數(~3,000)低於 10,000 起始值,IDL 長條在此設定下會不可見。 */}
+              IDL 排前面(藍)、DL 排後面(紫),各自 Approved(深)+ Gap(淺)疊加。margin.top 為圖表 SVG 座標數值
+              (非 Tailwind spacing class,不受 layout-space 規則約束),留白給長條上方 +Gap 註記。
+              單一 Y 軸,起始 10,000、每格 1,000(user 指定)。 */}
           <ChartContainer config={hiringGapConfig} className="flex-1 min-h-0 mt-[var(--layout-space-loose)]">
             <BarChart accessibilityLayer data={HIRING_GAP_TREND} margin={{ top: 28 }}>
               <CartesianGrid vertical={false} />
               <XAxis dataKey="quarter" tickLine={false} axisLine={false} tickMargin={8} />
+              {/* 每 1,000 一格(user 指定),但 12 格文字塞進 ~200px 高會互相重疊,故只在偶數格(每 2,000)顯示文字標籤、
+                  奇數格只留格線 —— 常見 major/minor gridline 慣例,格線解析度仍是 1,000。 */}
               <YAxis
                 tickLine={false}
                 axisLine={false}
                 width={52}
-                domain={[10000, 25000]}
-                ticks={[10000, 15000, 20000, 25000]}
-                tickFormatter={(v: number) => v.toLocaleString()}
+                domain={[10000, 21000]}
+                ticks={[10000, 11000, 12000, 13000, 14000, 15000, 16000, 17000, 18000, 19000, 20000, 21000]}
+                interval={0}
+                tickFormatter={(v: number) => (v % 2000 === 0 ? v.toLocaleString() : '')}
               />
               <ChartTooltip content={<ChartTooltipContent formatter={hiringGapTooltipFormatter} />} />
-              <Bar dataKey="dlApproved" stackId="dl" fill="var(--color-dlApproved)" radius={2} />
-              <Bar dataKey="dlGap" stackId="dl" fill="var(--color-dlGap)" radius={2}>
-                <LabelList
-                  dataKey="dlGap"
-                  position="top"
-                  formatter={hiringGapLabelFormatter}
-                  className="text-caption"
-                  style={{ fill: 'var(--fg-secondary)' }}
-                />
-              </Bar>
               <Bar dataKey="idlApproved" stackId="idl" fill="var(--color-idlApproved)" radius={2} />
               <Bar dataKey="idlGap" stackId="idl" fill="var(--color-idlGap)" radius={2}>
                 <LabelList
@@ -501,6 +503,32 @@ function OverviewPage() {
                   style={{ fill: 'var(--fg-secondary)' }}
                 />
               </Bar>
+              <Bar dataKey="dlApproved" stackId="dl" fill="var(--color-dlApproved)" radius={2} />
+              <Bar dataKey="dlGap" stackId="dl" fill="var(--color-dlGap)" radius={2}>
+                <LabelList
+                  dataKey="dlGap"
+                  position="top"
+                  formatter={hiringGapLabelFormatter}
+                  className="text-caption"
+                  style={{ fill: 'var(--fg-secondary)' }}
+                />
+              </Bar>
+              {/* Recharts Legend 預設會依內部 stackId 字母排序(dl < idl)自動排 DL 在前,與 IDL 排最前面的要求相反 —
+                  改用自訂 content function,直接照 hiringGapConfig 順序(IDL 先)畫兩個色塊,不經 recharts 自動排序。 */}
+              <ChartLegend
+                content={() => (
+                  <div className="flex items-center justify-center gap-[var(--layout-space-loose)] pt-[var(--layout-space-tight)]">
+                    <div className="flex items-center gap-[var(--layout-space-tight)] text-fg-secondary text-caption">
+                      <Square size={8} fill={hiringGapConfig.idlApproved.color} stroke="none" />
+                      IDL
+                    </div>
+                    <div className="flex items-center gap-[var(--layout-space-tight)] text-fg-secondary text-caption">
+                      <Square size={8} fill={hiringGapConfig.dlApproved.color} stroke="none" />
+                      DL
+                    </div>
+                  </div>
+                )}
+              />
             </BarChart>
           </ChartContainer>
         </ScoreCard>
