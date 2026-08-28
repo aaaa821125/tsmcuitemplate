@@ -170,11 +170,12 @@ type HiringGapRow = {
   dlBudget: number; dlApproved: number; dlGap: number
   idlBudget: number; idlApproved: number; idlGap: number
 }
+// 2026-08-28 user 指定 DL/IDL 假數字量級改接近,方便共用同一條 10,000 起始 Y 軸都看得清楚。
 const HIRING_GAP_TREND: HiringGapRow[] = [
-  { quarter: '2026 Q1', dlBudget: 20560, dlApproved: 20000, dlGap: 560, idlBudget: 3200, idlApproved: 3050, idlGap: 150 },
-  { quarter: '2026 Q2', dlBudget: 19800, dlApproved: 19500, dlGap: 300, idlBudget: 3150, idlApproved: 3100, idlGap: 50 },
-  { quarter: '2026 Q3', dlBudget: 18900, dlApproved: 18750, dlGap: 150, idlBudget: 3000, idlApproved: 2880, idlGap: 120 },
-  { quarter: '2026 Q4', dlBudget: 19200, dlApproved: 18800, dlGap: 400, idlBudget: 3080, idlApproved: 2980, idlGap: 100 },
+  { quarter: '2026 Q1', dlBudget: 20560, dlApproved: 20000, dlGap: 560, idlBudget: 19200, idlApproved: 18900, idlGap: 300 },
+  { quarter: '2026 Q2', dlBudget: 19800, dlApproved: 19500, dlGap: 300, idlBudget: 18600, idlApproved: 18400, idlGap: 200 },
+  { quarter: '2026 Q3', dlBudget: 18900, dlApproved: 18750, dlGap: 150, idlBudget: 17800, idlApproved: 17600, idlGap: 200 },
+  { quarter: '2026 Q4', dlBudget: 19200, dlApproved: 18800, dlGap: 400, idlBudget: 18000, idlApproved: 17700, idlGap: 300 },
 ]
 // 2026-08-28 user 指定改回原本紫/藍配色。
 const hiringGapConfig = {
