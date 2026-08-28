@@ -244,10 +244,24 @@ function KeyInfoCard({ card }: { card: (typeof KEY_INFO_CARDS)[number] }) {
       {/* Large/500,16/150(text-body-lg font-medium token)+ 加深至 text-foreground(對齊 designer 要求「黑一點」)。
           固定保留 2 行高度(不論標題實際幾行),避免長標題(如 Local Manager Representation)換行撐開、
           導致下方數字跟別張卡片高度對不齊 —— 對齊 designer 要求「數字高度對齊,不要上上下下的」。 */}
+      {/* @story-baseline: @qijenchen/design-system/components/Tooltip/tooltip.stories.tsx#Default —
+          2026-08-28 user 指定 (!) 拿回來,hover 顯示 key data description(取代原本只顯示日期)。
+          Last updated 日期維持常駐顯示於標題下方(下一行),不進 tooltip。 */}
       {/* @layout-space-magic-ok: min-h-[3rem] 是固定 2 行標題高度預留(非 spacing/gap),延續本檔既有 designer 對齊需求 */}
-      <div className="text-body-lg font-medium text-foreground min-h-[3rem]">{card.title}</div>
-      {/* 2026-08-28 user 指定:(!) hover 提示拿掉,Last updated 日期改常駐顯示於標題下方、灰階小字
-          (text-caption + text-fg-muted,對齊本檔既有小字說明規範,如 deltaSuffix / Insights source 行)。 */}
+      <div className="flex items-start gap-1 min-h-[3rem]">
+        <span className="text-body-lg font-medium text-foreground">{card.title}</span>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <span
+              className="inline-flex items-center text-fg-muted cursor-default flex-none"
+              aria-label={card.description}
+            >
+              <Info size={14} />
+            </span>
+          </TooltipTrigger>
+          <TooltipContent>{card.description}</TooltipContent>
+        </Tooltip>
+      </div>
       <div className="text-caption text-fg-muted">Last updated: {card.updatedAt}</div>
       {/* 數字至少 32px(text-h2 token = 32px,designer guideline 下限);標題到數字間距拉開至 16px(loose token) */}
       <div className="text-h2 font-bold tabular-nums mt-[var(--layout-space-loose)]">{card.value}</div>
@@ -259,8 +273,6 @@ function KeyInfoCard({ card }: { card: (typeof KEY_INFO_CARDS)[number] }) {
         <KeyInfoDeltaTag delta={card.delta} />
         <span className="text-caption text-fg-muted">{card.deltaSuffix}</span>
       </div>
-      {/* Key data description —— 原 (!) hover 內容改常駐顯示,同樣走 text-caption + text-fg-muted 小字灰階規範 */}
-      <div className="text-caption text-fg-muted mt-[var(--layout-space-tight)]">{card.description}</div>
     </ScoreCard>
   )
 }
