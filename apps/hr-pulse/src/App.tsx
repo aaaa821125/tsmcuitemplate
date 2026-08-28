@@ -20,6 +20,7 @@ import {
   Bar,
   BarChart,
   CartesianGrid,
+  LabelList,
   Line,
   LineChart,
   XAxis,
@@ -115,13 +116,27 @@ function DeltaLabel({ delta }: { delta: Delta }) {
   )
 }
 
+// 5 張 key information 小卡的 +X% —— 用 Tag 包裹(DS Tag 無 type/state/outline prop,見 tag.spec.md;
+// 用最接近的實際 prop 對應:正數 color="green"、負數 color="amber"〈淺橘,淺底深字〉,預設 subtle(非
+// solid)+ size="sm"。icon 沿用 DeltaLabel 同一組方向 icon。
+// @story-baseline: @qijenchen/design-system/components/Tag/tag.stories.tsx
+function KeyInfoDeltaTag({ delta }: { delta: Delta }) {
+  const Icon = delta.direction === 'up' ? TrendingUp : delta.direction === 'down' ? TrendingDown : Minus
+  const color = delta.direction === 'up' ? 'green' : delta.direction === 'down' ? 'amber' : 'neutral'
+  return (
+    <Tag color={color} size="sm" icon={Icon}>
+      {delta.text}
+    </Tag>
+  )
+}
+
 // 卡片標題旁的「上次更新」提示 —— hover icon 才顯示時間,不佔用標題列空間。
 // @story-baseline: @qijenchen/design-system/components/Tooltip/tooltip.stories.tsx
 function CardTitleWithUpdated({ title, updatedAt }: { title: string; updatedAt: string }) {
   return (
     <div className="flex items-center gap-1">
-      {/* 24/130(text-h3 token)—— 對齊 designer 指定字級/行高級距 */}
-      <span className="text-h3 font-bold">{title}</span>
+      {/* 24/130(text-h3 token)—— 對齊 designer 指定字級/行高級距;字重 medium(對齊 designer 要求) */}
+      <span className="text-h3 font-medium">{title}</span>
       <Tooltip>
         <TooltipTrigger asChild>
           <span className="inline-flex items-center text-fg-muted cursor-default" aria-label={`Last updated ${updatedAt}`}>
@@ -135,27 +150,78 @@ function CardTitleWithUpdated({ title, updatedAt }: { title: string; updatedAt: 
 }
 
 // ── Overview: Turnover rate(折線,三系列)+ Hiring gap(長條)── 皆為 2026 假數字,待接真實資料源。
+// 2026-08-28 user 指定三系列改名 + 固定數值(僅給單組數字、未給逐季變化,故四季維持同值,非臆測趨勢)。
 const TURNOVER_TREND = [
-  { quarter: '2026 Q1', turnoverRate: 7.2, voluntary: 5.6, regrettable: 4.0 },
-  { quarter: '2026 Q2', turnoverRate: 6.8, voluntary: 5.2, regrettable: 3.6 },
-  { quarter: '2026 Q3', turnoverRate: 7.6, voluntary: 5.9, regrettable: 4.3 },
-  { quarter: '2026 Q4', turnoverRate: 6.5, voluntary: 4.8, regrettable: 3.4 },
+  { quarter: '2026 Q1', turnover: 3.4, newcomer: 2.7, voluntary: 2.3 },
+  { quarter: '2026 Q2', turnover: 3.4, newcomer: 2.7, voluntary: 2.3 },
+  { quarter: '2026 Q3', turnover: 3.4, newcomer: 2.7, voluntary: 2.3 },
+  { quarter: '2026 Q4', turnover: 3.4, newcomer: 2.7, voluntary: 2.3 },
 ]
 const turnoverConfig = {
-  turnoverRate: { label: 'Turnover rate', color: 'var(--chart-1)' },
-  regrettable: { label: 'Regrettable Turnover', color: 'var(--chart-2)' },
-  voluntary: { label: 'Voluntary Turnover', color: 'var(--chart-3)' },
+  turnover: { label: 'Turnover', color: 'var(--chart-1)' },
+  newcomer: { label: 'Newcomer turnover', color: 'var(--chart-2)' },
+  voluntary: { label: 'Voluntary turnover', color: 'var(--chart-3)' },
 } satisfies ChartConfig
 
-const HIRING_GAP_TREND = [
-  { quarter: '2026 Q1', gap: 15 },
-  { quarter: '2026 Q2', gap: 12 },
-  { quarter: '2026 Q3', gap: 9 },
-  { quarter: '2026 Q4', gap: 12 },
+// 2026-08-28 user 指定改版:同 Quarter 兩條(DL 紫色/IDL 藍色),各自 Approved(深)+ Gap(淺)疊加至 Budget、
+// 長條上方標「+Gap」註記。僅給 DL 範例(Budget 20,560/Approved 20,000/Gap 560)當 Q1 DL,其餘為對齊範例量級的假數字。
+type HiringGapRow = {
+  quarter: string
+  dlBudget: number; dlApproved: number; dlGap: number
+  idlBudget: number; idlApproved: number; idlGap: number
+}
+const HIRING_GAP_TREND: HiringGapRow[] = [
+  { quarter: '2026 Q1', dlBudget: 20560, dlApproved: 20000, dlGap: 560, idlBudget: 3200, idlApproved: 3050, idlGap: 150 },
+  { quarter: '2026 Q2', dlBudget: 19800, dlApproved: 19500, dlGap: 300, idlBudget: 3150, idlApproved: 3100, idlGap: 50 },
+  { quarter: '2026 Q3', dlBudget: 18900, dlApproved: 18750, dlGap: 150, idlBudget: 3000, idlApproved: 2880, idlGap: 120 },
+  { quarter: '2026 Q4', dlBudget: 19200, dlApproved: 18800, dlGap: 400, idlBudget: 3080, idlApproved: 2980, idlGap: 100 },
 ]
 const hiringGapConfig = {
-  gap: { label: 'Hiring gap', color: 'var(--chart-1)' },
+  dlApproved: { label: 'DL Approved', color: 'var(--color-purple-6)' },
+  dlGap: { label: 'DL Gap', color: 'var(--color-purple-3)' },
+  idlApproved: { label: 'IDL Approved', color: 'var(--color-blue-6)' },
+  idlGap: { label: 'IDL Gap', color: 'var(--color-blue-3)' },
 } satisfies ChartConfig
+
+// Hover-only detail(Budget/Approved/Gap + %)—— 长条本身只标 +Gap 註記,保持畫面整潔(對齊 user 指示)。
+function hiringGapTooltipFormatter(value: unknown, _name: unknown, item: { dataKey?: string | number }, _index: number, payload: unknown) {
+  const row = payload as HiringGapRow
+  const key = String(item.dataKey) as keyof typeof hiringGapConfig
+  const isDl = key.startsWith('dl')
+  const budget = isDl ? row.dlBudget : row.idlBudget
+
+  // Approved row 額外多帶一行 Budget(user 明確要求 Budget/Approved/Gap 三者皆呈現於 hover 詳情)
+  if (key.endsWith('Approved')) {
+    return (
+      <div className="flex w-full flex-1 flex-col gap-[var(--layout-space-tight)]">
+        <div className="flex w-full justify-between gap-[var(--layout-space-tight)]">
+          <span className="text-fg-secondary">{isDl ? 'DL' : 'IDL'} Budget</span>
+          <span className="text-foreground font-mono font-medium tabular-nums">{budget.toLocaleString()}</span>
+        </div>
+        <div className="flex w-full justify-between gap-[var(--layout-space-tight)]">
+          <span className="text-fg-secondary">{hiringGapConfig[key].label}</span>
+          <span className="text-foreground font-mono font-medium tabular-nums">{Number(value).toLocaleString()}</span>
+        </div>
+      </div>
+    )
+  }
+
+  const pct = ((Number(value) / budget) * 100).toFixed(1)
+  return (
+    <div className="flex w-full flex-1 justify-between gap-[var(--layout-space-tight)]">
+      <span className="text-fg-secondary">{hiringGapConfig[key].label}</span>
+      <span className="text-foreground font-mono font-medium tabular-nums">
+        {Number(value).toLocaleString()} ({pct}%)
+      </span>
+    </div>
+  )
+}
+
+// +Gap 長條上方註記 —— DS 無「root--small」token;text-caption 是 spec 文件標明的「圖表附註」用途 token,取代之。
+function hiringGapLabelFormatter(label: unknown) {
+  const value = Number(label)
+  return value > 0 ? `+${value.toLocaleString()}` : value.toLocaleString()
+}
 
 // 統一時間格式:`<來源>, YYYY/MM/DD`(對齊 DS DatePicker 預設格式 —— date-picker.tsx:37
 // 「Default format:YYYY/MM/DD,year-first ISO-like,locale-independent」,非隨意 MMM D, YYYY)。
@@ -170,9 +236,9 @@ const INSIGHTS = [
 const KEY_INFO_CARDS: { id: string; title: string; value: string; delta: Delta; deltaSuffix: string; updatedAt: string }[] = [
   { id: 'new-hire-engagement', title: 'New Hire Performance (Wecare Survey)', value: '40%', delta: { direction: 'up', text: '+2%' }, deltaSuffix: 'vs 2026Q3', updatedAt: '2026/08/26 06:00' },
   { id: 'internal-mobility', title: 'Internal Mobility', value: '40%', delta: { direction: 'up', text: '+5%' }, deltaSuffix: 'vs 14 days ago', updatedAt: '2026/08/26 06:00' },
-  { id: 'new-hire-engagement-2', title: 'New Hire Engagement (Wecare Survey)', value: '80%', delta: { direction: 'down', text: '-5%' }, deltaSuffix: 'vs 2026Q3', updatedAt: '2026/08/26 06:00' },
+  { id: 'new-hire-engagement-2', title: 'New Hire Engagement (EES Survey)', value: '80%', delta: { direction: 'down', text: '-5%' }, deltaSuffix: 'vs 2026Q3', updatedAt: '2026/08/26 06:00' },
   { id: 'manager-fulfillment-gap', title: 'Manager Fulfillment Gap', value: '12%', delta: { direction: 'up', text: '+0.8%' }, deltaSuffix: 'vs 2026Q3', updatedAt: '2026/08/26 06:00' },
-  { id: 'local-manager-representation', title: 'Local Manager Representation', value: '50%', delta: { direction: 'up', text: '+2%' }, deltaSuffix: 'vs 2026Q3', updatedAt: '2026/08/26 06:00' },
+  { id: 'local-manager-representation', title: 'Local Manager Representation (Oversea fab)', value: '50%', delta: { direction: 'up', text: '+2%' }, deltaSuffix: 'vs 2026Q3', updatedAt: '2026/08/26 06:00' },
 ]
 
 function KeyInfoCard({ card }: { card: (typeof KEY_INFO_CARDS)[number] }) {
@@ -198,11 +264,15 @@ function KeyInfoCard({ card }: { card: (typeof KEY_INFO_CARDS)[number] }) {
           <TooltipContent>Last updated: {card.updatedAt}</TooltipContent>
         </Tooltip>
       </div>
-      {/* 數字至少 32px(text-h2 token = 32px,designer guideline 下限) */}
-      <div className="text-h2 font-bold tabular-nums mt-[var(--layout-space-tight)]">{card.value}</div>
-      <div className="mt-1">
-        <DeltaLabel delta={card.delta} />
-        <span className="text-caption text-fg-muted"> {card.deltaSuffix}</span>
+      {/* 數字至少 32px(text-h2 token = 32px,designer guideline 下限);標題到數字間距拉開至 16px(loose token) */}
+      <div className="text-h2 font-bold tabular-nums mt-[var(--layout-space-loose)]">{card.value}</div>
+      {/* @story-baseline: @qijenchen/design-system/components/Tag/tag.stories.tsx —
+          +X% 用 Tag 包裹:DS Tag 無 type/state/outline prop(僅 color 類別色 + solid boolean + size),
+          正數 color="green"、負數 color="amber"(淺橘,DS 唯一近似「warning 淺橘」的 categorical hue),
+          預設 subtle(非 solid,視覺近「outline」淺底)+ size="sm"。 */}
+      <div className="mt-[var(--layout-space-tight)] flex items-center gap-[var(--layout-space-tight)]">
+        <KeyInfoDeltaTag delta={card.delta} />
+        <span className="text-caption text-fg-muted">{card.deltaSuffix}</span>
       </div>
     </ScoreCard>
   )
@@ -375,15 +445,16 @@ function OverviewPage() {
       <section className="flex gap-[var(--layout-space-loose)] h-[280px]">
         <ScoreCard className="flex-1 min-w-0 min-h-0 flex flex-col overflow-hidden">
           <CardTitleWithUpdated title="Turnover rate" updatedAt="2026/08/26 06:00" />
-          <ChartContainer config={turnoverConfig} className="flex-1 min-h-0 mt-[var(--layout-space-tight)]">
+          {/* 標題與圖表間距拉開至 16px(loose token,對齊 designer 規範下限) */}
+          <ChartContainer config={turnoverConfig} className="flex-1 min-h-0 mt-[var(--layout-space-loose)]">
             <LineChart accessibilityLayer data={TURNOVER_TREND}>
               <CartesianGrid vertical={false} />
               <XAxis dataKey="quarter" tickLine={false} axisLine={false} tickMargin={8} />
               <YAxis tickLine={false} axisLine={false} width={28} domain={[0, 10]} />
               <ChartTooltip content={<ChartTooltipContent indicator="line" />} />
               <ChartLegend content={<ChartLegendContent />} />
-              <Line dataKey="turnoverRate" type="monotone" stroke="var(--color-turnoverRate)" strokeWidth={2} dot={false} />
-              <Line dataKey="regrettable" type="monotone" stroke="var(--color-regrettable)" strokeWidth={2} dot={false} />
+              <Line dataKey="turnover" type="monotone" stroke="var(--color-turnover)" strokeWidth={2} dot={false} />
+              <Line dataKey="newcomer" type="monotone" stroke="var(--color-newcomer)" strokeWidth={2} dot={false} />
               <Line dataKey="voluntary" type="monotone" stroke="var(--color-voluntary)" strokeWidth={2} dot={false} />
             </LineChart>
           </ChartContainer>
@@ -391,13 +462,36 @@ function OverviewPage() {
 
         <ScoreCard className="flex-1 min-w-0 min-h-0 flex flex-col overflow-hidden">
           <CardTitleWithUpdated title="Hiring Gap" updatedAt="2026/08/26 06:00" />
-          <ChartContainer config={hiringGapConfig} className="flex-1 min-h-0 mt-[var(--layout-space-tight)]">
-            <BarChart accessibilityLayer data={HIRING_GAP_TREND}>
+          {/* 標題與圖表間距拉開至 16px(loose token,對齊 designer 規範下限)。
+              @story-baseline: @qijenchen/design-system/components/Chart/chart.stories.tsx#BarChartRevenue —
+              DL/IDL 兩條 stacked bar(Approved 深 + Gap 淺),margin.top 為圖表 SVG 座標數值(非 Tailwind spacing class,不受 layout-space 規則約束),留白給長條上方 +Gap 註記。 */}
+          <ChartContainer config={hiringGapConfig} className="flex-1 min-h-0 mt-[var(--layout-space-loose)]">
+            <BarChart accessibilityLayer data={HIRING_GAP_TREND} margin={{ top: 20 }}>
               <CartesianGrid vertical={false} />
               <XAxis dataKey="quarter" tickLine={false} axisLine={false} tickMargin={8} />
-              <YAxis tickLine={false} axisLine={false} width={28} />
-              <ChartTooltip content={<ChartTooltipContent indicator="dashed" />} />
-              <Bar dataKey="gap" fill="var(--color-gap)" radius={4} />
+              {/* width 加大到 52 —— DL budget 值改為 5 位數(如 20,560),原本 28px(給 2 位數字設計)會裁切座標軸標籤 */}
+              <YAxis tickLine={false} axisLine={false} width={52} tickFormatter={(v: number) => v.toLocaleString()} />
+              <ChartTooltip content={<ChartTooltipContent formatter={hiringGapTooltipFormatter} />} />
+              <Bar dataKey="dlApproved" stackId="dl" fill="var(--color-dlApproved)" radius={2} />
+              <Bar dataKey="dlGap" stackId="dl" fill="var(--color-dlGap)" radius={2}>
+                <LabelList
+                  dataKey="dlGap"
+                  position="top"
+                  formatter={hiringGapLabelFormatter}
+                  className="text-caption"
+                  style={{ fill: 'var(--fg-secondary)' }}
+                />
+              </Bar>
+              <Bar dataKey="idlApproved" stackId="idl" fill="var(--color-idlApproved)" radius={2} />
+              <Bar dataKey="idlGap" stackId="idl" fill="var(--color-idlGap)" radius={2}>
+                <LabelList
+                  dataKey="idlGap"
+                  position="top"
+                  formatter={hiringGapLabelFormatter}
+                  className="text-caption"
+                  style={{ fill: 'var(--fg-secondary)' }}
+                />
+              </Bar>
             </BarChart>
           </ChartContainer>
         </ScoreCard>
@@ -412,7 +506,7 @@ function OverviewPage() {
 
       {/* Row 3: HRPO Insights — 拿掉 Attention Required / Recent Data Updates 後拉上來,給足空間 */}
       <ScoreCard>
-        <div className="text-body font-bold">HRPO Insights</div>
+        <div className="text-body font-bold">Domain Insights</div>
         <div className="flex flex-col gap-2 mt-[var(--layout-space-tight)]">
           {INSIGHTS.map((insight) => (
             <div key={insight.id} className="flex gap-2 rounded-r-md border-l-[3px] border-primary bg-primary-subtle p-2">
