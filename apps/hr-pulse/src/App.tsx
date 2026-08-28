@@ -81,6 +81,7 @@ import {
   Minus,
   ArrowUp,
   ArrowDown,
+  Sparkles,
   Pin,
   Info,
   Square,
@@ -192,29 +193,13 @@ const hiringGapConfig = {
   dlGap: { label: 'DL Gap', color: 'var(--color-purple-3)' },
 } satisfies ChartConfig
 
-// Hover-only detail(Budget/Approved/Gap + %)—— 长条本身只标 +Gap 註記,保持畫面整潔(對齊 user 指示)。
+// 2026-08-28 user 指定 hover 只顯示 DL/IDL 的 Gap 數值和 %(Budget/Approved 不再顯示,保持最精簡)。
 function hiringGapTooltipFormatter(value: unknown, _name: unknown, item: { dataKey?: string | number }, _index: number, payload: unknown) {
-  const row = payload as HiringGapRow
   const key = String(item.dataKey) as keyof typeof hiringGapConfig
-  const isDl = key.startsWith('dl')
-  const budget = isDl ? row.dlBudget : row.idlBudget
+  if (key.endsWith('Approved')) return null
 
-  // Approved row 額外多帶一行 Budget(user 明確要求 Budget/Approved/Gap 三者皆呈現於 hover 詳情)
-  if (key.endsWith('Approved')) {
-    return (
-      <div className="flex w-full flex-1 flex-col gap-[var(--layout-space-tight)]">
-        <div className="flex w-full justify-between gap-[var(--layout-space-tight)]">
-          <span className="text-fg-secondary">{isDl ? 'DL' : 'IDL'} Budget</span>
-          <span className="text-foreground font-mono font-medium tabular-nums">{budget.toLocaleString()}</span>
-        </div>
-        <div className="flex w-full justify-between gap-[var(--layout-space-tight)]">
-          <span className="text-fg-secondary">{hiringGapConfig[key].label}</span>
-          <span className="text-foreground font-mono font-medium tabular-nums">{Number(value).toLocaleString()}</span>
-        </div>
-      </div>
-    )
-  }
-
+  const row = payload as HiringGapRow
+  const budget = key.startsWith('dl') ? row.dlBudget : row.idlBudget
   const gapValue = Number(value)
   const pct = ((gapValue / budget) * 100).toFixed(1)
   return (
@@ -243,12 +228,14 @@ const INSIGHTS = [
 ]
 
 // 5 張 key information 小卡(等寬),放在 Turnover rate / Hiring gap 之下、HRPO Insights 之上。皆為假數字。
-const KEY_INFO_CARDS: { id: string; title: string; value: string; delta: Delta; deltaSuffix: string; updatedAt: string }[] = [
-  { id: 'new-hire-engagement', title: 'New Hire Performance (Wecare Survey)', value: '40%', delta: { direction: 'up', text: '+2%' }, deltaSuffix: 'vs 2026Q3', updatedAt: '2026/08/26 06:00' },
-  { id: 'internal-mobility', title: 'Internal Mobility', value: '40%', delta: { direction: 'up', text: '+5%' }, deltaSuffix: 'vs 14 days ago', updatedAt: '2026/08/26 06:00' },
-  { id: 'new-hire-engagement-2', title: 'New Hire Engagement (EES Survey)', value: '80%', delta: { direction: 'down', text: '-5%' }, deltaSuffix: 'vs 2026Q3', updatedAt: '2026/08/26 06:00' },
-  { id: 'manager-fulfillment-gap', title: 'Manager Fulfillment Gap', value: '12%', delta: { direction: 'up', text: '+0.8%' }, deltaSuffix: 'vs 2026Q3', updatedAt: '2026/08/26 06:00' },
-  { id: 'local-manager-representation', title: 'Local Manager Representation (Oversea fab)', value: '50%', delta: { direction: 'up', text: '+2%' }, deltaSuffix: 'vs 2026Q3', updatedAt: '2026/08/26 06:00' },
+// description = 原本 hover (!) 顯示的內容,user 指定改為卡片內常駐顯示的小字說明(僅 New Hire Performance 的文案是
+// user 給定原文,其餘 4 張為對齊格式的假文案,待接真實 methodology note)。
+const KEY_INFO_CARDS: { id: string; title: string; value: string; delta: Delta; deltaSuffix: string; updatedAt: string; description: string }[] = [
+  { id: 'new-hire-engagement', title: 'New Hire Performance', value: '40%', delta: { direction: 'up', text: '+2%' }, deltaSuffix: 'vs 2026Q3', updatedAt: '2026/08/26 06:00', description: '% of new hires who have S+ or above (top ~35%) for first 3 years rating (tracks hires in last 5 years)' },
+  { id: 'internal-mobility', title: 'Internal Mobility', value: '40%', delta: { direction: 'up', text: '+5%' }, deltaSuffix: 'vs 14 days ago', updatedAt: '2026/08/26 06:00', description: '% of open roles filled by internal candidates (tracks postings in last 90 days)' },
+  { id: 'new-hire-engagement-2', title: 'New Hire Engagement (EES Survey)', value: '80%', delta: { direction: 'down', text: '-5%' }, deltaSuffix: 'vs 2026Q3', updatedAt: '2026/08/26 06:00', description: '% of new hires reporting positive engagement in first 6 months (EES survey response rate ~82%)' },
+  { id: 'manager-fulfillment-gap', title: 'Manager Fulfillment Gap', value: '12%', delta: { direction: 'up', text: '+0.8%' }, deltaSuffix: 'vs 2026Q3', updatedAt: '2026/08/26 06:00', description: '% gap between approved manager headcount and actual filled manager roles (current quarter)' },
+  { id: 'local-manager-representation', title: 'Local Manager Representation (Oversea fab)', value: '50%', delta: { direction: 'up', text: '+2%' }, deltaSuffix: 'vs 2026Q3', updatedAt: '2026/08/26 06:00', description: '% of overseas fab manager roles held by local (in-country) hires' },
 ]
 
 function KeyInfoCard({ card }: { card: (typeof KEY_INFO_CARDS)[number] }) {
@@ -257,23 +244,11 @@ function KeyInfoCard({ card }: { card: (typeof KEY_INFO_CARDS)[number] }) {
       {/* Large/500,16/150(text-body-lg font-medium token)+ 加深至 text-foreground(對齊 designer 要求「黑一點」)。
           固定保留 2 行高度(不論標題實際幾行),避免長標題(如 Local Manager Representation)換行撐開、
           導致下方數字跟別張卡片高度對不齊 —— 對齊 designer 要求「數字高度對齊,不要上上下下的」。 */}
-      {/* @story-baseline: @qijenchen/design-system/components/Tooltip/tooltip.stories.tsx#Default —
-          hover Info icon 顯示假的最後更新時間,對齊 Turnover rate/Hiring Gap 卡片已用的同一 Tooltip pattern */}
       {/* @layout-space-magic-ok: min-h-[3rem] 是固定 2 行標題高度預留(非 spacing/gap),延續本檔既有 designer 對齊需求 */}
-      <div className="flex items-start gap-1 min-h-[3rem]">
-        <span className="text-body-lg font-medium text-foreground">{card.title}</span>
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <span
-              className="inline-flex items-center text-fg-muted cursor-default flex-none"
-              aria-label={`Last updated ${card.updatedAt}`}
-            >
-              <Info size={14} />
-            </span>
-          </TooltipTrigger>
-          <TooltipContent>Last updated: {card.updatedAt}</TooltipContent>
-        </Tooltip>
-      </div>
+      <div className="text-body-lg font-medium text-foreground min-h-[3rem]">{card.title}</div>
+      {/* 2026-08-28 user 指定:(!) hover 提示拿掉,Last updated 日期改常駐顯示於標題下方、灰階小字
+          (text-caption + text-fg-muted,對齊本檔既有小字說明規範,如 deltaSuffix / Insights source 行)。 */}
+      <div className="text-caption text-fg-muted">Last updated: {card.updatedAt}</div>
       {/* 數字至少 32px(text-h2 token = 32px,designer guideline 下限);標題到數字間距拉開至 16px(loose token) */}
       <div className="text-h2 font-bold tabular-nums mt-[var(--layout-space-loose)]">{card.value}</div>
       {/* @story-baseline: @qijenchen/design-system/components/Tag/tag.stories.tsx —
@@ -284,6 +259,8 @@ function KeyInfoCard({ card }: { card: (typeof KEY_INFO_CARDS)[number] }) {
         <KeyInfoDeltaTag delta={card.delta} />
         <span className="text-caption text-fg-muted">{card.deltaSuffix}</span>
       </div>
+      {/* Key data description —— 原 (!) hover 內容改常駐顯示,同樣走 text-caption + text-fg-muted 小字灰階規範 */}
+      <div className="text-caption text-fg-muted mt-[var(--layout-space-tight)]">{card.description}</div>
     </ScoreCard>
   )
 }
@@ -545,9 +522,11 @@ function OverviewPage() {
       <ScoreCard>
         <div className="text-body font-bold">Domain Insights</div>
         <div className="flex flex-col gap-2 mt-[var(--layout-space-tight)]">
-          {INSIGHTS.map((insight) => (
+          {/* 2026-08-28 user 指定:拿掉三則的 pin icon;第一則(最新一筆)改用 Sparkles 象徵「new」,
+              之後每次有新內容上傳時優先插入陣列最上面(INSIGHTS 已依時間新→舊排序),自動沿用同一顯示規則。 */}
+          {INSIGHTS.map((insight, index) => (
             <div key={insight.id} className="flex gap-2 rounded-r-md border-l-[3px] border-primary bg-primary-subtle p-2">
-              <Pin size={13} className="mt-0.5 flex-none text-primary" />
+              {index === 0 && <Sparkles size={13} className="mt-0.5 flex-none text-primary" />}
               <p className="text-caption text-foreground leading-relaxed m-0">
                 {insight.text}
                 <span className="block mt-1 text-caption text-fg-muted font-medium">— {insight.source}</span>
