@@ -1,5 +1,8 @@
 // HR Pulse — Executive Overview + per-pillar detail pages
 //
+// code-quality-allow: file-size — 單一 route 的 app entry(無 router),Overview / PillarDetail /
+// Talent 三個頁面模板與其專屬 chart/metric helper 彼此高內聚(各自的 @story-baseline 引用緊鄰
+// 使用處),拆檔只會打散引用脈絡、不會降低耦合;當前 ~950 行,對齊 tabs.tsx 同款 file-size escape 先例。
 // @story-baseline: @qijenchen/design-system/components/Sidebar/sidebar.stories.tsx#IconCollapse
 // @story-baseline: @qijenchen/design-system/components/Select/select.stories.tsx#Modes
 // @story-baseline: @qijenchen/design-system/components/DescriptionList/description-list.stories.tsx
@@ -55,6 +58,21 @@ import {
   Tooltip,
   TooltipTrigger,
   TooltipContent,
+  Popover,
+  PopoverTrigger,
+  PopoverContent,
+  PopoverHeader,
+  PopoverTitle,
+  PopoverBody,
+  Tabs,
+  TabsList,
+  TabsTrigger,
+  TabsContent,
+  Accordion,
+  AccordionItem,
+  AccordionTrigger,
+  AccordionContent,
+  CircularProgress,
 } from '@qijenchen/design-system'
 import {
   LayoutDashboard,
@@ -268,7 +286,9 @@ function KeyInfoCard({ card }: { card: (typeof KEY_INFO_CARDS)[number] }) {
   )
 }
 
-type PillarId = 'talent' | 'leadership' | 'culture' | 'engagement' | 'globalization'
+// 'talent' 不在此 union 內 —— Talent 頁改用專屬 TalentPage(tab + key/leading metric drill-down),
+// 不再套用其餘 4 個 pillar 共用的 PillarDetailPage template。
+type PillarId = 'leadership' | 'culture' | 'engagement' | 'globalization'
 
 type PillarDetail = {
   id: PillarId
@@ -283,17 +303,6 @@ type PillarDetail = {
 
 // 各 pillar 細節頁資料(沿用可對應的既有內容,Leadership / Culture / Globalization 為新增 — 待實際資料源接上)。
 const PILLAR_DETAILS: Record<PillarId, PillarDetail> = {
-  talent: {
-    id: 'talent', label: 'Talent', icon: Users, score: 82, delta: { direction: 'up', text: '+5' },
-    metrics: [
-      { label: 'Time to Fill', value: '32 days' },
-      { label: 'Cost per Hire', value: '$4,850' },
-      { label: 'Offer Acceptance Rate', value: '87%' },
-      { label: 'Open Requisitions', value: '24' },
-    ],
-    trend: [{ period: "Q3'24", value: 74 }, { period: "Q4'24", value: 78 }, { period: "Q1'25", value: 80 }, { period: "Q2'25", value: 82 }],
-    note: 'Offer acceptance rate improved to 87% this quarter, above the 80% target. Continue monitoring time-to-fill in Engineering.',
-  },
   leadership: {
     id: 'leadership', label: 'Leadership', icon: Award, score: 75, delta: { direction: 'up', text: '+2' },
     metrics: [
@@ -340,6 +349,184 @@ const PILLAR_DETAILS: Record<PillarId, PillarDetail> = {
   },
 }
 
+// ── Talent page:Leadership Development / Talent Productivity 兩個 tab ──────────
+// 每個 tab 由若干 Key metric 組成,部分 Key 帶 Leading metric(附屬於該 Key,縮排展示在同一卡片內)。
+// user 指定:點選任一 Key 或 Leading data,其下方展示該指標 2026 Q1~Q4 折線變化(皆為假數字,
+// 待接真實資料源;Q4 = user 給定當前值,Q1-Q3 為對齊量級的假波動,沿用本檔 TURNOVER_TREND 同一慣例)。
+type QuarterPoint = { period: string; value: number }
+
+function quarterlySeries(q1: number, q2: number, q3: number, q4: number): QuarterPoint[] {
+  return [
+    { period: '2026 Q1', value: q1 },
+    { period: '2026 Q2', value: q2 },
+    { period: '2026 Q3', value: q3 },
+    { period: '2026 Q4', value: q4 },
+  ]
+}
+
+type MetricUnit = 'percent' | 'days' | 'currency'
+
+type MetricDatum = {
+  id: string
+  label: string
+  value: number
+  displayValue: string
+  unit: MetricUnit
+  trend: QuarterPoint[]
+}
+
+type KeyMetricDatum = MetricDatum & { leading?: MetricDatum[] }
+
+// user 給定:Headcount Fulfilment Gap 58%(圓餅圖,滿分 100%),帶 3 個 Leading data。
+const HEADCOUNT_FULFILMENT_GAP: KeyMetricDatum = {
+  id: 'headcount-fulfilment-gap',
+  label: 'Headcount Fulfilment Gap',
+  value: 58,
+  displayValue: '58%',
+  unit: 'percent',
+  trend: quarterlySeries(51, 54, 56, 58),
+  leading: [
+    { id: 'mobility-willingness-rate', label: 'Mobility willingness rate', value: 35, displayValue: '35%', unit: 'percent', trend: quarterlySeries(30, 32, 34, 35) },
+    { id: 'assignee-experience', label: 'Assignee experience', value: 27, displayValue: '27%', unit: 'percent', trend: quarterlySeries(24, 25, 26, 27) },
+    { id: 'time-to-fill-fulfilment-gap', label: 'Time to fill', value: 49, displayValue: '49 days', unit: 'days', trend: quarterlySeries(55, 53, 51, 49) },
+  ],
+}
+
+// user 給定:Critical Roles Vacancy Ratio 14%,帶 2 個 Leading data。
+const CRITICAL_ROLES_VACANCY_RATIO: KeyMetricDatum = {
+  id: 'critical-roles-vacancy-ratio',
+  label: 'Critical Roles Vacancy Ratio',
+  value: 14,
+  displayValue: '14%',
+  unit: 'percent',
+  trend: quarterlySeries(18, 17, 15, 14),
+  leading: [
+    { id: 'time-to-fill-vacancy-ratio', label: 'Time to fill', value: 68, displayValue: '68 days', unit: 'days', trend: quarterlySeries(74, 72, 70, 68) },
+    { id: 'internal-fill-managers', label: 'Internal fill (managers)', value: 95, displayValue: '95 days', unit: 'days', trend: quarterlySeries(102, 100, 97, 95) },
+  ],
+}
+
+const LEADERSHIP_DEVELOPMENT_KEYS: KeyMetricDatum[] = [HEADCOUNT_FULFILMENT_GAP, CRITICAL_ROLES_VACANCY_RATIO]
+
+// user 指定「先幫我放假數字」—— 4 張皆為假數字,待接真實資料源;無 Leading data(user 未提供)。
+const TALENT_PRODUCTIVITY_KEYS: KeyMetricDatum[] = [
+  { id: 'new-hire-performance', label: 'New Hire Performance', value: 42, displayValue: '42%', unit: 'percent', trend: quarterlySeries(36, 38, 40, 42) },
+  { id: 'quality-of-hire', label: 'Quality of Hire — Hiring Manager Satisfaction', value: 88, displayValue: '88%', unit: 'percent', trend: quarterlySeries(84, 85, 87, 88) },
+  { id: 'revenue-per-employee', label: 'Revenue per Employee', value: 215000, displayValue: '$215K', unit: 'currency', trend: quarterlySeries(198000, 205000, 210000, 215000) },
+  { id: 'profit-per-employee', label: 'Profit per Employee', value: 48000, displayValue: '$48K', unit: 'currency', trend: quarterlySeries(41000, 43000, 46000, 48000) },
+]
+
+// Key metric 的達成率指示(滿分 100%)—— 直接消費 DS CircularProgress(determinate ring:
+// 可見 track `var(--secondary)` + 進度 arc),而非手刻 Pie/Cell donut(踩過 --divider track
+// 幾乎透明看不見的坑)。數值放 ring 右側(DS 決策:CircularProgress 不支援置中 affix,
+// 見 circular-progress.tsx docblock「不設 status prop」段同一 anti-over-designing 立場)。
+// @story-baseline: @qijenchen/design-system/components/CircularProgress/circular-progress.stories.tsx
+function KeyProgressRing({ value, size = 'md' }: { value: number; size?: 'md' | 'sm' }) {
+  return (
+    <div className="flex items-center gap-[var(--layout-space-tight)]">
+      <CircularProgress value={value} size={size === 'md' ? 64 : 48} />
+      <span className="text-h2 font-bold tabular-nums">{value}%</span>
+    </div>
+  )
+}
+
+const trendConfig = { value: { label: 'Value', color: 'var(--chart-1)' } } satisfies ChartConfig
+
+// 點選 Key / Leading data 展示的 2026 Q1~Q4 折線圖 —— 沿用本檔既有 LineChart 手法(單一系列版)。
+// @story-baseline: @qijenchen/design-system/components/Chart/chart.stories.tsx#LineChartResponseTime
+function MetricTrendChart({ data }: { data: QuarterPoint[] }) {
+  return (
+    <ChartContainer config={trendConfig} className="h-[100px] w-full mt-[var(--layout-space-tight)]">
+      <LineChart accessibilityLayer data={data} margin={{ top: 8, right: 8, left: 8, bottom: 0 }}>
+        <CartesianGrid vertical={false} />
+        <XAxis dataKey="period" tickLine={false} axisLine={false} tickMargin={6} padding={{ left: 24, right: 24 }} />
+        <YAxis hide domain={['dataMin - 2', 'dataMax + 2']} />
+        <ChartTooltip content={<ChartTooltipContent indicator="line" />} />
+        <Line dataKey="value" type="monotone" stroke="var(--color-value)" strokeWidth={2} dot={{ r: 3 }} />
+      </LineChart>
+    </ChartContainer>
+  )
+}
+
+// Key metric 卡片:圓餅圖(percent)或大數字(currency)+ 點擊展開季度趨勢;若帶 Leading data,
+// 縮排展示在卡片下半部(視覺上明確從屬於該 Key)。展開/收合皆用 DS Accordion(非手刻 chevron 按鈕)——
+// Key 自己是獨立單一 item 的 Accordion(type="single" collapsible),Leading 群組是另一個
+// type="multiple" 的 Accordion(各自獨立展開,互不影響)。
+// @story-baseline: @qijenchen/design-system/components/Accordion/accordion.stories.tsx#Default
+function KeyMetricCard({ metric, donutSize = 'md' }: { metric: KeyMetricDatum; donutSize?: 'md' | 'sm' }) {
+  return (
+    <ScoreCard className="flex-1 min-w-0 flex flex-col">
+      <div className="text-body font-bold">{metric.label}</div>
+      <Accordion type="single" collapsible className="mt-[var(--layout-space-loose)]">
+        <AccordionItem value={metric.id} className="border-b-0">
+          <AccordionTrigger className="py-[var(--layout-space-tight)]">
+            <div className="flex items-center gap-[var(--layout-space-loose)]">
+              {metric.unit === 'percent' ? (
+                <KeyProgressRing value={metric.value} size={donutSize} />
+              ) : (
+                <span className="text-h2 font-bold tabular-nums">{metric.displayValue}</span>
+              )}
+              <span className="text-caption font-normal text-fg-muted">2026 Q1–Q4 trend</span>
+            </div>
+          </AccordionTrigger>
+          <AccordionContent>
+            <MetricTrendChart data={metric.trend} />
+          </AccordionContent>
+        </AccordionItem>
+      </Accordion>
+
+      {metric.leading && metric.leading.length > 0 && (
+        <div className="mt-[var(--layout-space-loose)] border-t border-divider pt-[var(--layout-space-tight)]">
+          <div className="text-caption font-medium text-fg-muted">Leading indicators</div>
+          <Accordion type="multiple" className="mt-[var(--layout-space-tight)]">
+            {metric.leading.map((m) => (
+              <AccordionItem key={m.id} value={m.id}>
+                <AccordionTrigger className="py-[var(--layout-space-tight)] text-body">
+                  <div className="flex flex-1 items-center justify-between gap-[var(--layout-space-tight)]">
+                    <span className="text-caption font-normal text-fg-secondary">{m.label}</span>
+                    <span className="font-medium tabular-nums">{m.displayValue}</span>
+                  </div>
+                </AccordionTrigger>
+                <AccordionContent>
+                  <MetricTrendChart data={m.trend} />
+                </AccordionContent>
+              </AccordionItem>
+            ))}
+          </Accordion>
+        </div>
+      )}
+    </ScoreCard>
+  )
+}
+
+// @story-baseline: @qijenchen/design-system/components/Tabs/tabs.stories.tsx#Default
+function TalentPage() {
+  return (
+    <div className="px-[var(--layout-space-tight)] py-[var(--layout-space-tight)]">
+      <Tabs defaultValue="leadership-development">
+        <TabsList>
+          <TabsTrigger value="leadership-development">Leadership Development</TabsTrigger>
+          <TabsTrigger value="talent-productivity">Talent Productivity</TabsTrigger>
+        </TabsList>
+        <TabsContent value="leadership-development" className="mt-[var(--layout-space-loose)]">
+          <section className="flex gap-[var(--layout-space-loose)] items-start">
+            {LEADERSHIP_DEVELOPMENT_KEYS.map((metric) => (
+              <KeyMetricCard key={metric.id} metric={metric} />
+            ))}
+          </section>
+        </TabsContent>
+        <TabsContent value="talent-productivity" className="mt-[var(--layout-space-loose)]">
+          <section className="grid grid-cols-2 gap-[var(--layout-space-loose)]">
+            {TALENT_PRODUCTIVITY_KEYS.map((metric) => (
+              <KeyMetricCard key={metric.id} metric={metric} donutSize="sm" />
+            ))}
+          </section>
+        </TabsContent>
+      </Tabs>
+    </div>
+  )
+}
+
 // 2026-08-31 user 指定改採 TSMC design guideline「頂部佈局 Header」:左上 logo 常駐在跨頁 global header,
 // 下面才是當前頁的 page header(顯示內容標題)。對齊 DS AppShell primary-header mode(app-shell.spec.md
 // 「primary-header = primary-sidebar + 一條 global header」)——不是重新設計,是切換既有 layout mode。
@@ -378,6 +565,50 @@ function WorkspaceBrand() {
   )
 }
 
+// 通知內容 —— 最新一筆在最上面(對齊 INSIGHTS 同一「新→舊」慣例)。皆為 user 給定原文。
+const NOTIFICATIONS = [
+  { id: 'hrpo-insights', text: 'HRPO Analyses Team has uploaded the latest insights', time: '2026/08/26 13:00' },
+  { id: 'new-hire-perf', text: 'New Hire performance data has been updated!', time: '2026/08/26 06:00' },
+]
+
+// @story-baseline: @qijenchen/design-system/components/Popover/popover.stories.tsx#FilterPanel —
+// List-as-region 場景(見 popover.tsx PopoverBody docblock):PopoverBody 撤掉 chrome padding,
+// consumer 自管 list 結構。
+function NotificationsPopover() {
+  return (
+    <Popover>
+      <PopoverTrigger asChild>
+        <Button
+          variant="tertiary"
+          size="sm"
+          iconOnly
+          startIcon={Bell}
+          aria-label={`通知 (${NOTIFICATIONS.length} 則)`}
+          overlayBadge={<Badge count={NOTIFICATIONS.length} variant="high" />}
+        />
+      </PopoverTrigger>
+      <PopoverContent align="end" className="w-80">
+        <PopoverHeader>
+          <PopoverTitle>Notifications</PopoverTitle>
+        </PopoverHeader>
+        <PopoverBody className="!px-0 !py-0">
+          <div className="flex flex-col py-[var(--layout-space-tight)]">
+            {NOTIFICATIONS.map((n) => (
+              <div
+                key={n.id}
+                className="flex flex-col gap-[var(--layout-space-tight)] px-[var(--layout-space-loose)] py-[var(--layout-space-tight)] hover:bg-neutral-hover"
+              >
+                <p className="text-body text-foreground m-0">{n.text}</p>
+                <span className="text-caption text-fg-muted">{n.time}</span>
+              </div>
+            ))}
+          </div>
+        </PopoverBody>
+      </PopoverContent>
+    </Popover>
+  )
+}
+
 // @story-baseline: @qijenchen/design-system/components/AccountMenu/account-menu.stories.tsx
 // 跨頁 global header:logo(左)+ sidebar toggle(leadingRail)+ 通知 + 帳號入口(右)。
 // 對齊 app-shell.spec.md「帳號入口(Account entry)放置 SSOT」——primary-header mode 帳號入口在
@@ -387,14 +618,7 @@ function GlobalHeader() {
     <ChromeHeader className="bg-surface" leadingRail={<SidebarTrigger />}>
       <WorkspaceBrand />
       <div className="flex-1" />
-      <Button
-        variant="tertiary"
-        size="sm"
-        iconOnly
-        startIcon={Bell}
-        aria-label="通知 (3 則)"
-        overlayBadge={<Badge count={3} variant="high" />}
-      />
+      <NotificationsPopover />
       <AccountMenu user={{ name: 'CHRO', avatar: { color: 'indigo' } }} />
     </ChromeHeader>
   )
@@ -611,7 +835,11 @@ export default function App() {
   const [activeId, setActiveId] = useState<string>('overview')
   const [org, setOrg] = useState('overall')
 
-  const activePillar = activeId in PILLAR_DETAILS ? PILLAR_DETAILS[activeId as PillarId] : undefined
+  // 'talent' 走專屬 TalentPage(tab + key/leading drill-down),不套用其餘 pillar 共用的
+  // PillarDetailPage template(見 PillarId type 註解)。
+  const isTalent = activeId === 'talent'
+  const activePillar = !isTalent && activeId in PILLAR_DETAILS ? PILLAR_DETAILS[activeId as PillarId] : undefined
+  const pageTitle = isTalent ? 'Talent' : activePillar ? `${activePillar.label} Detail` : 'Overall'
 
   return (
     <TooltipProvider delayDuration={500} skipDelayDuration={300}>
@@ -623,9 +851,9 @@ export default function App() {
           layout="primary-header"
           globalHeader={<GlobalHeader />}
           sidebar={<AppSidebar />}
-          header={<PageHeader title={activePillar ? `${activePillar.label} Detail` : 'Overall'} org={org} onOrgChange={setOrg} />}
+          header={<PageHeader title={pageTitle} org={org} onOrgChange={setOrg} />}
         >
-          {activePillar ? <PillarDetailPage pillar={activePillar} /> : <OverviewPage />}
+          {isTalent ? <TalentPage /> : activePillar ? <PillarDetailPage pillar={activePillar} /> : <OverviewPage />}
         </AppShell>
       </SidebarProvider>
     </TooltipProvider>
