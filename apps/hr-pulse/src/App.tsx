@@ -233,7 +233,7 @@ const INSIGHTS = [
 const KEY_INFO_CARDS: { id: string; title: string; value: string; delta: Delta; deltaSuffix: string; updatedAt: string; description: string }[] = [
   { id: 'new-hire-engagement', title: 'New Hire Performance', value: '40%', delta: { direction: 'up', text: '+2%' }, deltaSuffix: 'vs 2026Q3', updatedAt: '2026/08/26 06:00', description: '% of new hires who have S+ or above (top ~35%) for first 3 years rating (tracks hires in last 5 years)' },
   { id: 'internal-mobility', title: 'Internal Mobility', value: '40%', delta: { direction: 'up', text: '+5%' }, deltaSuffix: 'vs 14 days ago', updatedAt: '2026/08/26 06:00', description: '% of open roles filled by internal candidates (tracks postings in last 90 days)' },
-  { id: 'new-hire-engagement-2', title: 'New Hire Engagement (EES Survey)', value: '80%', delta: { direction: 'down', text: '-5%' }, deltaSuffix: 'vs 2026Q3', updatedAt: '2026/08/26 06:00', description: '% of new hires reporting positive engagement in first 6 months (EES survey response rate ~82%)' },
+  { id: 'new-hire-engagement-2', title: 'New Hire Onboarding (Wecare Survey)', value: '80%', delta: { direction: 'down', text: '-5%' }, deltaSuffix: 'vs 2026Q3', updatedAt: '2026/08/26 06:00', description: '% of new hires reporting positive engagement in first 6 months (EES survey response rate ~82%)' },
   { id: 'manager-fulfillment-gap', title: 'Manager Fulfillment Gap', value: '12%', delta: { direction: 'up', text: '+0.8%' }, deltaSuffix: 'vs 2026Q3', updatedAt: '2026/08/26 06:00', description: '% gap between approved manager headcount and actual filled manager roles (current quarter)' },
   { id: 'local-manager-representation', title: 'Local Manager Representation (Oversea fab)', value: '50%', delta: { direction: 'up', text: '+2%' }, deltaSuffix: 'vs 2026Q3', updatedAt: '2026/08/26 06:00', description: '% of overseas fab manager roles held by local (in-country) hires' },
 ]
@@ -245,8 +245,8 @@ function KeyInfoCard({ card }: { card: (typeof KEY_INFO_CARDS)[number] }) {
           固定保留 2 行高度(不論標題實際幾行),避免長標題(如 Local Manager Representation)換行撐開、
           導致下方數字跟別張卡片高度對不齊 —— 對齊 designer 要求「數字高度對齊,不要上上下下的」。 */}
       {/* @story-baseline: @qijenchen/design-system/components/Tooltip/tooltip.stories.tsx#Default —
-          2026-08-28 user 指定 (!) 拿回來,hover 顯示 key data description(取代原本只顯示日期)。
-          Last updated 日期維持常駐顯示於標題下方(下一行),不進 tooltip。 */}
+          2026-08-31 user 指定:Last updated 日期改回 hover (!) 顯示,不再常駐於卡片上;
+          原本 hover 顯示 description 的行為拿掉(移除)。 */}
       {/* @layout-space-magic-ok: min-h-[3rem] 是固定 2 行標題高度預留(非 spacing/gap),延續本檔既有 designer 對齊需求 */}
       <div className="flex items-start gap-1 min-h-[3rem]">
         <span className="text-body-lg font-medium text-foreground">{card.title}</span>
@@ -254,15 +254,14 @@ function KeyInfoCard({ card }: { card: (typeof KEY_INFO_CARDS)[number] }) {
           <TooltipTrigger asChild>
             <span
               className="inline-flex items-center text-fg-muted cursor-default flex-none"
-              aria-label={card.description}
+              aria-label={`Last updated ${card.updatedAt}`}
             >
               <Info size={14} />
             </span>
           </TooltipTrigger>
-          <TooltipContent>{card.description}</TooltipContent>
+          <TooltipContent>Last updated: {card.updatedAt}</TooltipContent>
         </Tooltip>
       </div>
-      <div className="text-caption text-fg-muted">Last updated: {card.updatedAt}</div>
       {/* 數字至少 32px(text-h2 token = 32px,designer guideline 下限);標題到數字間距拉開至 16px(loose token) */}
       <div className="text-h2 font-bold tabular-nums mt-[var(--layout-space-loose)]">{card.value}</div>
       {/* @story-baseline: @qijenchen/design-system/components/Tag/tag.stories.tsx —
@@ -441,24 +440,8 @@ function OverviewPage() {
   return (
     <div className="px-[var(--layout-space-tight)] py-[var(--layout-space-tight)] space-y-[var(--layout-space-tight)]">
       {/* Row 1: Turnover rate(折線,三系列)+ Hiring gap(長條)— 橫向兩張卡 */}
+      {/* 2026-08-31 user 指定:Turnover rate 與 Hiring Gap 兩張圖表左右交換位置(Hiring Gap 現在在左)。 */}
       <section className="flex gap-[var(--layout-space-loose)] h-[280px]">
-        <ScoreCard className="flex-1 min-w-0 min-h-0 flex flex-col overflow-hidden">
-          <CardTitleWithUpdated title="Turnover rate" updatedAt="2026/08/26 06:00" />
-          {/* 標題與圖表間距拉開至 16px(loose token,對齊 designer 規範下限) */}
-          <ChartContainer config={turnoverConfig} className="flex-1 min-h-0 mt-[var(--layout-space-loose)]">
-            <LineChart accessibilityLayer data={TURNOVER_TREND}>
-              <CartesianGrid vertical={false} />
-              <XAxis dataKey="quarter" tickLine={false} axisLine={false} tickMargin={8} />
-              <YAxis tickLine={false} axisLine={false} width={28} domain={[0, 10]} />
-              <ChartTooltip content={<ChartTooltipContent indicator="line" />} />
-              <ChartLegend content={<ChartLegendContent />} />
-              <Line dataKey="turnover" type="monotone" stroke="var(--color-turnover)" strokeWidth={2} dot={false} />
-              <Line dataKey="newcomer" type="monotone" stroke="var(--color-newcomer)" strokeWidth={2} dot={false} />
-              <Line dataKey="voluntary" type="monotone" stroke="var(--color-voluntary)" strokeWidth={2} dot={false} />
-            </LineChart>
-          </ChartContainer>
-        </ScoreCard>
-
         <ScoreCard className="flex-1 min-w-0 min-h-0 flex flex-col overflow-hidden">
           <CardTitleWithUpdated title="Hiring Gap" updatedAt="2026/08/26 06:00" />
           {/* 標題與圖表間距拉開至 16px(loose token,對齊 designer 規範下限)。
@@ -519,6 +502,23 @@ function OverviewPage() {
                 )}
               />
             </BarChart>
+          </ChartContainer>
+        </ScoreCard>
+
+        <ScoreCard className="flex-1 min-w-0 min-h-0 flex flex-col overflow-hidden">
+          <CardTitleWithUpdated title="Turnover rate" updatedAt="2026/08/26 06:00" />
+          {/* 標題與圖表間距拉開至 16px(loose token,對齊 designer 規範下限) */}
+          <ChartContainer config={turnoverConfig} className="flex-1 min-h-0 mt-[var(--layout-space-loose)]">
+            <LineChart accessibilityLayer data={TURNOVER_TREND}>
+              <CartesianGrid vertical={false} />
+              <XAxis dataKey="quarter" tickLine={false} axisLine={false} tickMargin={8} />
+              <YAxis tickLine={false} axisLine={false} width={28} domain={[0, 10]} />
+              <ChartTooltip content={<ChartTooltipContent indicator="line" />} />
+              <ChartLegend content={<ChartLegendContent />} />
+              <Line dataKey="turnover" type="monotone" stroke="var(--color-turnover)" strokeWidth={2} dot={false} />
+              <Line dataKey="newcomer" type="monotone" stroke="var(--color-newcomer)" strokeWidth={2} dot={false} />
+              <Line dataKey="voluntary" type="monotone" stroke="var(--color-voluntary)" strokeWidth={2} dot={false} />
+            </LineChart>
           </ChartContainer>
         </ScoreCard>
       </section>
