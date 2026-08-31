@@ -201,9 +201,13 @@ function hiringGapTooltipFormatter(value: unknown, _name: unknown, item: { dataK
   const budget = key.startsWith('dl') ? row.dlBudget : row.idlBudget
   const gapValue = Number(value)
   const pct = ((gapValue / budget) * 100).toFixed(1)
+  // user 指定 hover 詳情也比照 Turnover rate legend,前面加色塊區分 IDL / DL(同一組 Square icon 手法)。
   return (
-    <div className="flex w-full flex-1 justify-between gap-[var(--layout-space-tight)]">
-      <span className="text-fg-secondary">{hiringGapConfig[key].label}</span>
+    <div className="flex w-full flex-1 items-center justify-between gap-[var(--layout-space-tight)]">
+      <span className="flex items-center gap-[var(--layout-space-tight)] text-fg-secondary">
+        <Square size={8} fill={hiringGapConfig[key].color} stroke="none" />
+        {hiringGapConfig[key].label}
+      </span>
       <span className="text-foreground font-mono font-medium tabular-nums">
         {gapValue > 0 ? `+${gapValue.toLocaleString()}` : gapValue.toLocaleString()} ({pct}%)
       </span>
