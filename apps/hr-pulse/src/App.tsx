@@ -57,7 +57,6 @@ import {
   ChartTooltip,
   ChartTooltipContent,
   ChartLegend,
-  ChartLegendContent,
   type ChartConfig,
   DescriptionList,
   DescriptionItem,
@@ -147,11 +146,11 @@ function CardTitleWithUpdated({ title, updatedAt }: { title: string; updatedAt: 
       <span className="text-h3 font-medium">{title}</span>
       <Tooltip>
         <TooltipTrigger asChild>
-          <span className="inline-flex items-center text-fg-muted cursor-default" aria-label={`Last updated ${updatedAt}`}>
+          <span className="inline-flex items-center text-fg-muted cursor-default" aria-label={`Latest update ${updatedAt}`}>
             <Info size={14} />
           </span>
         </TooltipTrigger>
-        <TooltipContent>Last updated: {updatedAt}</TooltipContent>
+        <TooltipContent>Latest update: {updatedAt}</TooltipContent>
       </Tooltip>
     </div>
   )
@@ -254,12 +253,12 @@ function KeyInfoCard({ card }: { card: (typeof KEY_INFO_CARDS)[number] }) {
           <TooltipTrigger asChild>
             <span
               className="inline-flex items-center text-fg-muted cursor-default flex-none"
-              aria-label={`Last updated ${card.updatedAt}`}
+              aria-label={`Latest update ${card.updatedAt}`}
             >
               <Info size={14} />
             </span>
           </TooltipTrigger>
-          <TooltipContent>Last updated: {card.updatedAt}</TooltipContent>
+          <TooltipContent>Latest update: {card.updatedAt}</TooltipContent>
         </Tooltip>
       </div>
       {/* 數字至少 32px(text-h2 token = 32px,designer guideline 下限);標題到數字間距拉開至 16px(loose token) */}
@@ -514,7 +513,22 @@ function OverviewPage() {
               <XAxis dataKey="quarter" tickLine={false} axisLine={false} tickMargin={8} />
               <YAxis tickLine={false} axisLine={false} width={28} domain={[0, 10]} />
               <ChartTooltip content={<ChartTooltipContent indicator="line" />} />
-              <ChartLegend content={<ChartLegendContent />} />
+              {/* Recharts Legend 預設依 dataKey 字母排序(newcomer < turnover < voluntary),
+                  跟 user 指定「Turnover / Newcomer turnover / Voluntary turnover」順序不同 —
+                  改用自訂 content function,直接照 turnoverConfig 順序畫,不經 recharts 自動排序
+                  (同 Hiring Gap legend 已用的手法)。 */}
+              <ChartLegend
+                content={() => (
+                  <div className="flex items-center justify-center gap-[var(--layout-space-loose)] pt-[var(--layout-space-tight)]">
+                    {(['turnover', 'newcomer', 'voluntary'] as const).map((key) => (
+                      <div key={key} className="flex items-center gap-[var(--layout-space-tight)] text-fg-secondary text-caption">
+                        <Square size={8} fill={turnoverConfig[key].color} stroke="none" />
+                        {turnoverConfig[key].label}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              />
               <Line dataKey="turnover" type="monotone" stroke="var(--color-turnover)" strokeWidth={2} dot={false} />
               <Line dataKey="newcomer" type="monotone" stroke="var(--color-newcomer)" strokeWidth={2} dot={false} />
               <Line dataKey="voluntary" type="monotone" stroke="var(--color-voluntary)" strokeWidth={2} dot={false} />
