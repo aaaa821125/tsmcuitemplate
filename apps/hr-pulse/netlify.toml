@@ -15,6 +15,14 @@
 [build.environment]
   NODE_VERSION = "22"
 
+# Free password protection (Edge Function Basic Auth) — see netlify/edge-functions/basic-auth.ts.
+# Set env var HR_PULSE_BASIC_AUTH = "user:password" (space-separated for multiple pairs) in this
+# site's Netlify dashboard → Site configuration → Environment variables. Unset or malformed =
+# fail-closed 503 (site locked), never a silent public pass-through.
+[[edge_functions]]
+  path = "/*"
+  function = "basic-auth"
+
 [[headers]]
   for = "/*"
   [headers.values]
