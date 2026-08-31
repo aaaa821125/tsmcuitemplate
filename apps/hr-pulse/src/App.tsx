@@ -31,10 +31,8 @@ import {
   SidebarProvider,
   Sidebar,
   SidebarContent,
-  SidebarFooter,
   SidebarGroup,
   SidebarGroupContent,
-  SidebarHeader,
   SidebarMenu,
   SidebarMenuItem,
   SidebarMenuButton,
@@ -42,14 +40,8 @@ import {
   ChromeHeader,
   TooltipProvider,
   Avatar,
-  ItemAvatar,
+  AccountMenu,
   Button,
-  DropdownMenu,
-  DropdownMenuTrigger,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuGroup,
   Select,
   Tag,
   Badge,
@@ -71,9 +63,6 @@ import {
   Heart,
   MessageSquare,
   Globe,
-  User,
-  Settings,
-  LogOut,
   Bell,
   TrendingUp,
   TrendingDown,
@@ -351,15 +340,14 @@ const PILLAR_DETAILS: Record<PillarId, PillarDetail> = {
   },
 }
 
+// 2026-08-31 user 指定改採 TSMC design guideline「頂部佈局 Header」:左上 logo 常駐在跨頁 global header,
+// 下面才是當前頁的 page header(顯示內容標題)。對齊 DS AppShell primary-header mode(app-shell.spec.md
+// 「primary-header = primary-sidebar + 一條 global header」)——不是重新設計,是切換既有 layout mode。
+// viewportInsetTop 讓 sidebar 從 globalHeader 底部起算(primary-header mode 必傳,否則 sidebar 會蓋住
+// globalHeader,見 sidebar.tsx「可被 viewportInsetTop prop override(per AppShell primary-header)」)。
 function AppSidebar() {
   return (
-    <Sidebar collapsible="icon">
-      <SidebarHeader>
-        <div className="flex items-center gap-2 min-w-0 group-data-[collapsible=icon]:justify-center">
-          <Avatar alt="HR Pulse" size={24} shape="square" color="indigo" solid />
-          <span className="text-body-lg font-medium truncate group-data-[collapsible=icon]:hidden">HR Pulse</span>
-        </div>
-      </SidebarHeader>
+    <Sidebar collapsible="icon" viewportInsetTop="var(--chrome-header-height)">
       <SidebarContent>
         <SidebarGroup>
           <SidebarGroupContent>
@@ -375,40 +363,47 @@ function AppSidebar() {
           </SidebarGroupContent>
         </SidebarGroup>
       </SidebarContent>
-      <SidebarFooter>
-        <SidebarMenu>
-          <SidebarMenuItem>
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <SidebarMenuButton asChild tooltip="檢視身分">
-                  <button type="button" aria-label="檢視身分與帳號設定">
-                    <ItemAvatar alt="CHRO" color="indigo" />
-                    <span data-sidebar="menu-label" className="min-w-0 flex-1 truncate">View as CHRO</span>
-                  </button>
-                </SidebarMenuButton>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="start" minWidth={280}>
-                <DropdownMenuGroup>
-                  <DropdownMenuLabel>當前使用者</DropdownMenuLabel>
-                  <DropdownMenuItem startIcon={User}>個人資料</DropdownMenuItem>
-                  <DropdownMenuItem startIcon={Settings}>設定</DropdownMenuItem>
-                </DropdownMenuGroup>
-                <DropdownMenuGroup>
-                  <DropdownMenuItem startIcon={LogOut}>登出</DropdownMenuItem>
-                </DropdownMenuGroup>
-              </DropdownMenuContent>
-            </DropdownMenu>
-          </SidebarMenuItem>
-        </SidebarMenu>
-      </SidebarFooter>
     </Sidebar>
   )
 }
 
+// Logo(WorkspaceBrand)——primary-header mode 放 GlobalHeader 左側,不再放 SidebarHeader
+// (app-shell.spec.md「WorkspaceBrand 放置 SSOT」:globalHeader 存在時 sidebar 內不重複)。
+function WorkspaceBrand() {
+  return (
+    <div className="flex items-center gap-[var(--layout-space-tight)] min-w-0">
+      <Avatar alt="HR Pulse" size={24} shape="square" color="indigo" solid />
+      <span className="text-body-lg font-medium truncate">HR Pulse</span>
+    </div>
+  )
+}
+
+// @story-baseline: @qijenchen/design-system/components/AccountMenu/account-menu.stories.tsx
+// 跨頁 global header:logo(左)+ sidebar toggle(leadingRail)+ 通知 + 帳號入口(右)。
+// 對齊 app-shell.spec.md「帳號入口(Account entry)放置 SSOT」——primary-header mode 帳號入口在
+// globalHeader 右側,不放 SidebarFooter(避免重複)。
+function GlobalHeader() {
+  return (
+    <ChromeHeader className="bg-surface" leadingRail={<SidebarTrigger />}>
+      <WorkspaceBrand />
+      <div className="flex-1" />
+      <Button
+        variant="tertiary"
+        size="sm"
+        iconOnly
+        startIcon={Bell}
+        aria-label="通知 (3 則)"
+        overlayBadge={<Badge count={3} variant="high" />}
+      />
+      <AccountMenu user={{ name: 'CHRO', avatar: { color: 'indigo' } }} />
+    </ChromeHeader>
+  )
+}
+
+// 當前頁 local page header——只保留頁面層級內容(標題 / org 篩選),trigger 與帳號已在 GlobalHeader。
 function PageHeader({ title, org, onOrgChange }: { title: string; org: string; onOrgChange: (value: string) => void }) {
   return (
     <ChromeHeader className="bg-surface">
-      <SidebarTrigger />
       <h1 className="text-body-lg font-medium flex-1 truncate">{title}</h1>
       <Tag color="blue">CHRO view</Tag>
       <Select
@@ -418,15 +413,6 @@ function PageHeader({ title, org, onOrgChange }: { title: string; org: string; o
         aria-label="Organization"
         width="hug"
       />
-      <Button
-        variant="tertiary"
-        size="sm"
-        iconOnly
-        startIcon={Bell}
-        aria-label="通知 (3 則)"
-        overlayBadge={<Badge count={3} variant="high" />}
-      />
-      <Avatar alt="CHRO" size={34} color="indigo" solid>CH</Avatar>
     </ChromeHeader>
   )
 }
@@ -630,10 +616,14 @@ export default function App() {
   return (
     <TooltipProvider delayDuration={500} skipDelayDuration={300}>
       <SidebarProvider activeId={activeId} onActiveChange={setActiveId}>
+        {/* @story-baseline: @qijenchen/design-system/components/AppShell/app-shell.stories.tsx#PrimaryHeader —
+            2026-08-31 user 指定改採 TSMC guideline「頂部佈局 Header」:logo 在 globalHeader 左、
+            page header 在下方顯示內容標題,對齊 AppShell primary-header layout mode。 */}
         <AppShell
-          layout="primary-sidebar"
+          layout="primary-header"
+          globalHeader={<GlobalHeader />}
           sidebar={<AppSidebar />}
-          header={<PageHeader title={activePillar ? `${activePillar.label} Detail` : 'Executive Overview'} org={org} onOrgChange={setOrg} />}
+          header={<PageHeader title={activePillar ? `${activePillar.label} Detail` : 'Overall'} org={org} onOrgChange={setOrg} />}
         >
           {activePillar ? <PillarDetailPage pillar={activePillar} /> : <OverviewPage />}
         </AppShell>
