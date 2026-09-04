@@ -23,9 +23,12 @@ import {
   Bar,
   BarChart,
   CartesianGrid,
+  Cell,
   LabelList,
   Line,
   LineChart,
+  Pie,
+  PieChart,
   XAxis,
   YAxis,
 } from 'recharts'
@@ -77,6 +80,7 @@ import {
 import {
   LayoutDashboard,
   Users,
+  Users2,
   Award,
   Heart,
   MessageSquare,
@@ -96,6 +100,7 @@ import {
 const NAV = [
   { id: 'overview', label: 'Overview', icon: LayoutDashboard },
   { id: 'talent', label: 'Talent', icon: Users },
+  { id: 'talent-2', label: 'Talent Page 2', icon: Users2 },
   { id: 'leadership', label: 'Leadership', icon: Award },
   { id: 'culture', label: 'Culture', icon: Heart },
   { id: 'engagement', label: 'Engagement', icon: MessageSquare },
@@ -374,6 +379,8 @@ type MetricDatum = {
 type KeyMetricDatum = MetricDatum & { leading?: MetricDatum[] }
 
 // user 給定:Headcount Fulfilment Gap 58%(圓餅圖,滿分 100%),帶 3 個 Leading data。
+// delta/updatedAt:Talent page2(KeyWithLeadingSwitcher)consume,與既有 trend(56→58)一致算出 +2;
+// Talent page1 的 KeyMetricCard 不讀這兩個選填欄位,對 page1 無影響。
 const HEADCOUNT_FULFILMENT_GAP: KeyMetricDatum = {
   id: 'headcount-fulfilment-gap',
   label: 'Headcount Fulfilment Gap',
@@ -381,6 +388,9 @@ const HEADCOUNT_FULFILMENT_GAP: KeyMetricDatum = {
   displayValue: '58%',
   unit: 'percent',
   trend: quarterlySeries(51, 54, 56, 58),
+  delta: { direction: 'up', text: '+2' },
+  deltaSuffix: 'vs 2026 Q3',
+  updatedAt: '2026/08/26 06:00',
   leading: [
     { id: 'mobility-willingness-rate', label: 'Mobility willingness rate', value: 35, displayValue: '35%', unit: 'percent', trend: quarterlySeries(30, 32, 34, 35) },
     { id: 'assignee-experience', label: 'Assignee experience', value: 27, displayValue: '27%', unit: 'percent', trend: quarterlySeries(24, 25, 26, 27) },
@@ -388,7 +398,7 @@ const HEADCOUNT_FULFILMENT_GAP: KeyMetricDatum = {
   ],
 }
 
-// user 給定:Critical Roles Vacancy Ratio 14%,帶 2 個 Leading data。
+// user 給定:Critical Roles Vacancy Ratio 14%,帶 2 個 Leading data。delta 與既有 trend(15→14)一致算出 -1。
 const CRITICAL_ROLES_VACANCY_RATIO: KeyMetricDatum = {
   id: 'critical-roles-vacancy-ratio',
   label: 'Critical Roles Vacancy Ratio',
@@ -396,6 +406,9 @@ const CRITICAL_ROLES_VACANCY_RATIO: KeyMetricDatum = {
   displayValue: '14%',
   unit: 'percent',
   trend: quarterlySeries(18, 17, 15, 14),
+  delta: { direction: 'down', text: '-1' },
+  deltaSuffix: 'vs 2026 Q3',
+  updatedAt: '2026/08/26 06:00',
   leading: [
     { id: 'time-to-fill-vacancy-ratio', label: 'Time to fill', value: 68, displayValue: '68 days', unit: 'days', trend: quarterlySeries(74, 72, 70, 68) },
     { id: 'internal-fill-managers', label: 'Internal fill (managers)', value: 95, displayValue: '95 days', unit: 'days', trend: quarterlySeries(102, 100, 97, 95) },
@@ -510,6 +523,151 @@ function TalentPage() {
           <section className="flex gap-[var(--layout-space-loose)] items-start">
             {LEADERSHIP_DEVELOPMENT_KEYS.map((metric) => (
               <KeyMetricCard key={metric.id} metric={metric} />
+            ))}
+          </section>
+        </TabsContent>
+        <TabsContent value="talent-productivity" className="mt-[var(--layout-space-loose)]">
+          <section className="grid grid-cols-2 gap-[var(--layout-space-loose)]">
+            {TALENT_PRODUCTIVITY_KEYS.map((metric) => (
+              <KeyMetricCard key={metric.id} metric={metric} donutSize="sm" />
+            ))}
+          </section>
+        </TabsContent>
+      </Tabs>
+    </div>
+  )
+}
+
+// ── Talent page2:與 Talent page 內容完全相同(同一組 LEADERSHIP_DEVELOPMENT_KEYS /
+// TALENT_PRODUCTIVITY_KEYS 資料),但 user 指定「另一個版本的 layout」——
+//   1. Key 改用真正的 Pie/PieChart 兩區段圓餅圖(而非 page1 的 CircularProgress ring),
+//      帶 (!) hover 時間 + delta vs 2026 Q3(沿用 Leadership 頁 CardTitleWithUpdated/KeyInfoDeltaTag)。
+//   2. Leading data 不再是 accordion 展開列表:Key 自己 + 其 Leading 併成一列「不用圓餅圖」的
+//      扁平小卡(第一個 Key 3 個 leading → 4 張並排;第二個 Key 2 個 leading → 3 張並排,
+//      套用 user 只示範一次、依既有資料結構類推的同一 pattern),點其中一張卡片標題,
+//      下方唯一一個共用長條圖就切換顯示該指標的 2026 Q1-Q4 趨勢。
+// Talent Productivity tab 無 leading data、user 未要求改版,原樣沿用 page1 的 KeyMetricCard。
+
+// Key 的達成率視覺(滿分 100%)—— 這次刻意用 Pie/PieChart 兩區段圓餅圖(非 CircularProgress),
+// 跟 page1 的 ring 拉開視覺差異;remainder 區段用 `var(--secondary)`(非 `var(--divider)`——
+// 踩過後者近乎透明看不見的坑,見 KeyProgressRing 附近註解)確保軌道可見。
+// @story-baseline: @qijenchen/design-system/components/Chart/chart.stories.tsx#DonutChartTrafficSource
+const pieConfig = {
+  value: { label: 'Value', color: 'var(--chart-1)' },
+  remainder: { label: 'Remaining', color: 'var(--secondary)' },
+} satisfies ChartConfig
+
+function KeyPieChart({ value }: { value: number }) {
+  const clamped = Math.max(0, Math.min(100, value))
+  const data = [
+    { name: 'value', amount: clamped },
+    { name: 'remainder', amount: 100 - clamped },
+  ]
+  return (
+    <div className="relative flex-none w-24 h-24">
+      <ChartContainer config={pieConfig} className="h-full w-full">
+        <PieChart>
+          <Pie data={data} dataKey="amount" nameKey="name" innerRadius={34} outerRadius={46} startAngle={90} endAngle={-270} strokeWidth={0}>
+            <Cell fill="var(--color-value)" />
+            <Cell fill="var(--color-remainder)" />
+          </Pie>
+        </PieChart>
+      </ChartContainer>
+      <div className="pointer-events-none absolute inset-0 flex items-center justify-center text-body-lg font-bold tabular-nums">
+        {value}%
+      </div>
+    </div>
+  )
+}
+
+// Key/Leading 共用的單一長條圖(user 指定「長條圖」,與 Talent page1 的折線圖區分)。
+// @story-baseline: @qijenchen/design-system/components/Chart/chart.stories.tsx#BarChartRevenue
+function MetricTrendBarChart({ data }: { data: QuarterPoint[] }) {
+  return (
+    <ChartContainer config={trendConfig} className="h-[140px] w-full mt-[var(--layout-space-loose)]">
+      <BarChart accessibilityLayer data={data} margin={{ top: 8, right: 8, left: 8, bottom: 0 }}>
+        <CartesianGrid vertical={false} />
+        <XAxis dataKey="period" tickLine={false} axisLine={false} tickMargin={6} padding={{ left: 24, right: 24 }} />
+        <YAxis hide domain={['dataMin - 2', 'dataMax + 2']} />
+        <ChartTooltip content={<ChartTooltipContent indicator="dashed" />} />
+        <Bar dataKey="value" fill="var(--color-value)" radius={4} />
+      </BarChart>
+    </ChartContainer>
+  )
+}
+
+// Key metric block:Pie 圓餅圖 + delta(hero)→ Key + Leading 排成一列可點選的扁平小卡(不用圓餅圖)
+// → 底部一個共用長條圖,顯示目前選中卡片的 2026 Q1-Q4 趨勢。「選中」的視覺(primary-subtle 底/字)
+// 借用 DS Button pressed=true 的 tone 語言(button.tsx compoundVariants「pressed 視覺...primary-subtle
+// 底、primary 字」)——但 Button 本身 children 固定包成單行 inline slot(button.tsx L474),
+// 裝不下這裡「標題+數值」兩行的卡片內容,故用 plain button 元素承載,
+// 屬 composition table「Self-contained」族(無共用 row/field anatomy 可套)。
+function KeyWithLeadingSwitcher({ metric }: { metric: KeyMetricDatum }) {
+  const options = [metric, ...(metric.leading ?? [])]
+  const [selectedId, setSelectedId] = useState(metric.id)
+  const selected = options.find((o) => o.id === selectedId) ?? metric
+
+  return (
+    <ScoreCard className="flex-1 min-w-0">
+      <div className="flex items-center gap-[var(--layout-space-loose)]">
+        <KeyPieChart value={metric.value} />
+        <div className="min-w-0">
+          {metric.updatedAt ? (
+            <CardTitleWithUpdated title={metric.label} updatedAt={metric.updatedAt} size="body" />
+          ) : (
+            <div className="text-body font-bold">{metric.label}</div>
+          )}
+          {metric.delta && (
+            <div className="mt-[var(--layout-space-tight)] flex items-center gap-[var(--layout-space-tight)]">
+              <KeyInfoDeltaTag delta={metric.delta} />
+              {metric.deltaSuffix && <span className="text-caption text-fg-muted">{metric.deltaSuffix}</span>}
+            </div>
+          )}
+        </div>
+      </div>
+
+      {options.length > 1 && (
+        <div className="mt-[var(--layout-space-loose)] flex gap-[var(--layout-space-tight)]">
+          {options.map((o) => {
+            const isActive = o.id === selectedId
+            return (
+              <button
+                key={o.id}
+                type="button"
+                aria-pressed={isActive}
+                onClick={() => setSelectedId(o.id)}
+                className={`flex-1 min-w-0 rounded-md border p-[var(--layout-space-tight)] text-left transition-colors ${
+                  isActive ? 'border-transparent bg-primary-subtle' : 'border-divider hover:bg-neutral-hover'
+                }`}
+              >
+                <div className={`text-caption truncate ${isActive ? 'text-primary' : 'text-fg-secondary'}`}>{o.label}</div>
+                <div className={`text-body-lg font-bold tabular-nums mt-[var(--layout-space-tight)] ${isActive ? 'text-primary' : 'text-foreground'}`}>
+                  {o.displayValue}
+                </div>
+              </button>
+            )
+          })}
+        </div>
+      )}
+
+      <MetricTrendBarChart data={selected.trend} />
+    </ScoreCard>
+  )
+}
+
+// @story-baseline: @qijenchen/design-system/components/Tabs/tabs.stories.tsx#Default
+function TalentPage2() {
+  return (
+    <div className="px-[var(--layout-space-tight)] py-[var(--layout-space-tight)]">
+      <Tabs defaultValue="leadership-development">
+        <TabsList>
+          <TabsTrigger value="leadership-development">Leadership Development</TabsTrigger>
+          <TabsTrigger value="talent-productivity">Talent Productivity</TabsTrigger>
+        </TabsList>
+        <TabsContent value="leadership-development" className="mt-[var(--layout-space-loose)]">
+          <section className="flex gap-[var(--layout-space-loose)] items-start">
+            {LEADERSHIP_DEVELOPMENT_KEYS.map((metric) => (
+              <KeyWithLeadingSwitcher key={metric.id} metric={metric} />
             ))}
           </section>
         </TabsContent>
@@ -975,12 +1133,22 @@ export default function App() {
   const [activeId, setActiveId] = useState<string>('overview')
   const [org, setOrg] = useState('overall')
 
-  // 'talent' / 'leadership' 走各自專屬頁面(tab + key/leading drill-down),不套用其餘 pillar
-  // 共用的 PillarDetailPage template(見 PillarId type 註解)。
+  // 'talent' / 'talent-2' / 'leadership' 走各自專屬頁面(tab + key/leading drill-down),
+  // 不套用其餘 pillar 共用的 PillarDetailPage template(見 PillarId type 註解)。
   const isTalent = activeId === 'talent'
+  const isTalent2 = activeId === 'talent-2'
   const isLeadership = activeId === 'leadership'
-  const activePillar = !isTalent && !isLeadership && activeId in PILLAR_DETAILS ? PILLAR_DETAILS[activeId as PillarId] : undefined
-  const pageTitle = isTalent ? 'Talent' : isLeadership ? 'Leadership' : activePillar ? `${activePillar.label} Detail` : 'Overall'
+  const activePillar =
+    !isTalent && !isTalent2 && !isLeadership && activeId in PILLAR_DETAILS ? PILLAR_DETAILS[activeId as PillarId] : undefined
+  const pageTitle = isTalent
+    ? 'Talent'
+    : isTalent2
+      ? 'Talent (Layout v2)'
+      : isLeadership
+        ? 'Leadership'
+        : activePillar
+          ? `${activePillar.label} Detail`
+          : 'Overall'
 
   return (
     <TooltipProvider delayDuration={500} skipDelayDuration={300}>
@@ -994,7 +1162,17 @@ export default function App() {
           sidebar={<AppSidebar />}
           header={<PageHeader title={pageTitle} org={org} onOrgChange={setOrg} />}
         >
-          {isTalent ? <TalentPage /> : isLeadership ? <LeadershipPage /> : activePillar ? <PillarDetailPage pillar={activePillar} /> : <OverviewPage />}
+          {isTalent ? (
+            <TalentPage />
+          ) : isTalent2 ? (
+            <TalentPage2 />
+          ) : isLeadership ? (
+            <LeadershipPage />
+          ) : activePillar ? (
+            <PillarDetailPage pillar={activePillar} />
+          ) : (
+            <OverviewPage />
+          )}
         </AppShell>
       </SidebarProvider>
     </TooltipProvider>
