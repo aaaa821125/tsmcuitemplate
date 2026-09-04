@@ -146,11 +146,13 @@ function KeyInfoDeltaTag({ delta }: { delta: Delta }) {
 
 // 卡片標題旁的「上次更新」提示 —— hover icon 才顯示時間,不佔用標題列空間。
 // @story-baseline: @qijenchen/design-system/components/Tooltip/tooltip.stories.tsx
-function CardTitleWithUpdated({ title, updatedAt }: { title: string; updatedAt: string }) {
+// size='h3'(預設)= Overview 圖表卡片標題級距(24/130,designer 指定);size='body' = 緊湊 Key card
+// 標題(Talent/Leadership Key card 同一字級,text-body font-bold),避免長 label(如「People Manager
+// Effectiveness」)在窄卡片內用 h3 折兩行、跟同排短 label 的卡片比例不一致。
+function CardTitleWithUpdated({ title, updatedAt, size = 'h3' }: { title: string; updatedAt: string; size?: 'h3' | 'body' }) {
   return (
-    <div className="flex items-center gap-1">
-      {/* 24/130(text-h3 token)—— 對齊 designer 指定字級/行高級距;字重 medium(對齊 designer 要求) */}
-      <span className="text-h3 font-medium">{title}</span>
+    <div className="flex items-center gap-[var(--layout-space-tight)]">
+      <span className={size === 'h3' ? 'text-h3 font-medium' : 'text-body font-bold'}>{title}</span>
       <Tooltip>
         <TooltipTrigger asChild>
           <span className="inline-flex items-center text-fg-muted cursor-default" aria-label={`Latest update ${updatedAt}`}>
@@ -286,9 +288,9 @@ function KeyInfoCard({ card }: { card: (typeof KEY_INFO_CARDS)[number] }) {
   )
 }
 
-// 'talent' 不在此 union 內 —— Talent 頁改用專屬 TalentPage(tab + key/leading metric drill-down),
-// 不再套用其餘 4 個 pillar 共用的 PillarDetailPage template。
-type PillarId = 'leadership' | 'culture' | 'engagement' | 'globalization'
+// 'talent' / 'leadership' 不在此 union 內 —— 兩者改用專屬頁面(TalentPage / LeadershipPage,
+// 皆為 tab + key/leading metric drill-down),不再套用其餘 pillar 共用的 PillarDetailPage template。
+type PillarId = 'culture' | 'engagement' | 'globalization'
 
 type PillarDetail = {
   id: PillarId
@@ -303,17 +305,6 @@ type PillarDetail = {
 
 // 各 pillar 細節頁資料(沿用可對應的既有內容,Leadership / Culture / Globalization 為新增 — 待實際資料源接上)。
 const PILLAR_DETAILS: Record<PillarId, PillarDetail> = {
-  leadership: {
-    id: 'leadership', label: 'Leadership', icon: Award, score: 75, delta: { direction: 'up', text: '+2' },
-    metrics: [
-      { label: 'Succession Coverage', value: '68%' },
-      { label: 'High-Potential Retention', value: '91%' },
-      { label: 'Leadership Bench Strength', value: 'Medium' },
-      { label: 'Avg. Span of Control', value: '6.2' },
-    ],
-    trend: [{ period: "Q3'24", value: 70 }, { period: "Q4'24", value: 72 }, { period: "Q1'25", value: 73 }, { period: "Q2'25", value: 75 }],
-    note: 'Succession coverage for critical roles remains below the 75% target — 12 roles still lack a ready-now successor.',
-  },
   culture: {
     id: 'culture', label: 'Culture', icon: Heart, score: 79, delta: { direction: 'up', text: '+1' },
     metrics: [
@@ -373,6 +364,11 @@ type MetricDatum = {
   displayValue: string
   unit: MetricUnit
   trend: QuarterPoint[]
+  /** 選填:vs 上期的漲跌(KeyInfoDeltaTag)+ 比較基準文案。無則不顯示漲跌列(Talent 頁既有卡片無此需求)。 */
+  delta?: Delta
+  deltaSuffix?: string
+  /** 選填:(!) hover 顯示的最後更新時間(CardTitleWithUpdated)。無則標題不帶 (!) icon。 */
+  updatedAt?: string
 }
 
 type KeyMetricDatum = MetricDatum & { leading?: MetricDatum[] }
@@ -421,11 +417,13 @@ const TALENT_PRODUCTIVITY_KEYS: KeyMetricDatum[] = [
 // 幾乎透明看不見的坑)。數值放 ring 右側(DS 決策:CircularProgress 不支援置中 affix,
 // 見 circular-progress.tsx docblock「不設 status prop」段同一 anti-over-designing 立場)。
 // @story-baseline: @qijenchen/design-system/components/CircularProgress/circular-progress.stories.tsx
-function KeyProgressRing({ value, size = 'md' }: { value: number; size?: 'md' | 'sm' }) {
+// displayValue 由 caller 傳完整格式化字串(非固定補 %)—— Leadership 頁 Key(如「92」無 % 符號)
+// 與 Talent 頁 Key(如「58%」)共用同一元件,格式差異交給資料層 displayValue,不在此元件寫死。
+function KeyProgressRing({ value, displayValue, size = 'md' }: { value: number; displayValue: string; size?: 'md' | 'sm' }) {
   return (
     <div className="flex items-center gap-[var(--layout-space-tight)]">
       <CircularProgress value={value} size={size === 'md' ? 64 : 48} />
-      <span className="text-h2 font-bold tabular-nums">{value}%</span>
+      <span className="text-h2 font-bold tabular-nums">{displayValue}</span>
     </div>
   )
 }
@@ -462,7 +460,7 @@ function KeyMetricCard({ metric, donutSize = 'md' }: { metric: KeyMetricDatum; d
           <AccordionTrigger className="py-[var(--layout-space-tight)]">
             <div className="flex items-center gap-[var(--layout-space-loose)]">
               {metric.unit === 'percent' ? (
-                <KeyProgressRing value={metric.value} size={donutSize} />
+                <KeyProgressRing value={metric.value} displayValue={metric.displayValue} size={donutSize} />
               ) : (
                 <span className="text-h2 font-bold tabular-nums">{metric.displayValue}</span>
               )}
@@ -520,6 +518,148 @@ function TalentPage() {
             {TALENT_PRODUCTIVITY_KEYS.map((metric) => (
               <KeyMetricCard key={metric.id} metric={metric} donutSize="sm" />
             ))}
+          </section>
+        </TabsContent>
+      </Tabs>
+    </div>
+  )
+}
+
+// ── Leadership page:Leadership Development / Leadership Pipeline 兩個 tab ──────
+// 與 Talent 頁不同:user 這次指定圖表「直接接」在 Key 下方(恆常顯示),非點擊展開 —— 故本節
+// 用 StatKeyCard(靜態疊加 CardTitleWithUpdated + KeyProgressRing/大數字 + delta + 趨勢圖),
+// 不套用 Talent 頁的 Accordion 展開/收合模式(互動模型不同,不可硬套)。
+// user 給定:People Manager Effectiveness 92(滿分 100)+5 vs 2026 Q3。
+const LEADERSHIP_PEOPLE_MANAGER_EFFECTIVENESS: MetricDatum = {
+  id: 'people-manager-effectiveness',
+  label: 'People Manager Effectiveness',
+  value: 92,
+  displayValue: '92',
+  unit: 'percent',
+  trend: quarterlySeries(80, 84, 87, 92),
+  delta: { direction: 'up', text: '+5' },
+  deltaSuffix: 'vs 2026 Q3',
+  updatedAt: '2026/08/26 06:00',
+}
+// user 給定:Manager Development Feedback Survey 91,「其他資訊和 People Manager Effectiveness 一樣」
+// (同一組 delta/updatedAt 格式)—— 視為 People Manager Effectiveness 的 Leading indicator(從屬關係)。
+const LEADERSHIP_MANAGER_DEV_FEEDBACK: MetricDatum = {
+  id: 'manager-development-feedback-survey',
+  label: 'Manager Development Feedback Survey',
+  value: 91,
+  displayValue: '91',
+  unit: 'percent',
+  trend: quarterlySeries(79, 83, 86, 91),
+  delta: { direction: 'up', text: '+5' },
+  deltaSuffix: 'vs 2026 Q3',
+  updatedAt: '2026/08/26 06:00',
+}
+// user 指定「用假數字」,無 Leading data。
+const LEADERSHIP_INTERNAL_MOBILITY: MetricDatum = {
+  id: 'leadership-internal-mobility',
+  label: 'Internal Mobility',
+  value: 40,
+  displayValue: '40%',
+  unit: 'percent',
+  trend: quarterlySeries(28, 32, 35, 40),
+  delta: { direction: 'up', text: '+5' },
+  deltaSuffix: 'vs 2026 Q3',
+  updatedAt: '2026/08/26 06:00',
+}
+
+// Leadership Pipeline tab —— user 指定「現在就用假數字設計」succession / pipeline 相關 Key metrics,
+// 沿用同一套 StatKeyCard 呈現(無 Leading data,user 未提供從屬指標)。
+const LEADERSHIP_SUCCESSION_COVERAGE: MetricDatum = {
+  id: 'succession-coverage',
+  label: 'Succession Coverage',
+  value: 64,
+  displayValue: '64%',
+  unit: 'percent',
+  trend: quarterlySeries(55, 58, 61, 64),
+  delta: { direction: 'up', text: '+3' },
+  deltaSuffix: 'vs 2026 Q3',
+  updatedAt: '2026/08/26 06:00',
+}
+const LEADERSHIP_READY_NOW_SUCCESSOR_RATIO: MetricDatum = {
+  id: 'ready-now-successor-ratio',
+  label: 'Ready-Now Successor Ratio',
+  value: 41,
+  displayValue: '41%',
+  unit: 'percent',
+  trend: quarterlySeries(48, 46, 43, 41),
+  delta: { direction: 'down', text: '-2' },
+  deltaSuffix: 'vs 2026 Q3',
+  updatedAt: '2026/08/26 06:00',
+}
+
+// 靜態(非點擊展開)Key metric 卡片內容:標題(選填 (!) hover 時間)+ ring/大數字 + 選填 delta +
+// 恆常顯示的季度趨勢圖。只回傳內容,外層 chrome(ScoreCard)交給 caller —— 讓 caller 可以把兩張
+// StatKeyCard 併入同一個 ScoreCard 表達從屬關係(見 LeadershipPage「Leading indicator of」分組)。
+function StatKeyCard({ metric }: { metric: MetricDatum }) {
+  return (
+    <div className="flex-1 min-w-0">
+      {metric.updatedAt ? (
+        <CardTitleWithUpdated title={metric.label} updatedAt={metric.updatedAt} size="body" />
+      ) : (
+        <div className="text-body font-bold">{metric.label}</div>
+      )}
+      <div className="mt-[var(--layout-space-loose)]">
+        {metric.unit === 'percent' ? (
+          <KeyProgressRing value={metric.value} displayValue={metric.displayValue} />
+        ) : (
+          <span className="text-h2 font-bold tabular-nums">{metric.displayValue}</span>
+        )}
+      </div>
+      {metric.delta && (
+        <div className="mt-[var(--layout-space-tight)] flex items-center gap-[var(--layout-space-tight)]">
+          <KeyInfoDeltaTag delta={metric.delta} />
+          {metric.deltaSuffix && <span className="text-caption text-fg-muted">{metric.deltaSuffix}</span>}
+        </div>
+      )}
+      <MetricTrendChart data={metric.trend} />
+    </div>
+  )
+}
+
+// @story-baseline: @qijenchen/design-system/components/Tabs/tabs.stories.tsx#Default
+function LeadershipPage() {
+  return (
+    <div className="px-[var(--layout-space-tight)] py-[var(--layout-space-tight)]">
+      <Tabs defaultValue="leadership-development">
+        <TabsList>
+          <TabsTrigger value="leadership-development">Leadership Development</TabsTrigger>
+          <TabsTrigger value="leadership-pipeline">Leadership Pipeline</TabsTrigger>
+        </TabsList>
+        <TabsContent value="leadership-development" className="mt-[var(--layout-space-loose)]">
+          <section className="flex gap-[var(--layout-space-loose)] items-stretch">
+            {/* People Manager Effectiveness + 其 Leading indicator 併在同一張 ScoreCard,中間一條
+                divider 分隔、右側加「Leading indicator of ...」標籤 —— 明確表達從屬關係(user 指定
+                「要看得出來是從屬關係」),而非兩張各自獨立、看不出關聯的卡片。 */}
+            <ScoreCard className="flex-[2] min-w-0">
+              <div className="flex gap-[var(--layout-space-loose)]">
+                <StatKeyCard metric={LEADERSHIP_PEOPLE_MANAGER_EFFECTIVENESS} />
+                <div className="w-px bg-divider self-stretch" />
+                <div className="flex-1 min-w-0">
+                  <div className="text-caption font-medium text-fg-muted mb-[var(--layout-space-tight)]">
+                    Leading indicator of People Manager Effectiveness
+                  </div>
+                  <StatKeyCard metric={LEADERSHIP_MANAGER_DEV_FEEDBACK} />
+                </div>
+              </div>
+            </ScoreCard>
+            <ScoreCard className="flex-1 min-w-0">
+              <StatKeyCard metric={LEADERSHIP_INTERNAL_MOBILITY} />
+            </ScoreCard>
+          </section>
+        </TabsContent>
+        <TabsContent value="leadership-pipeline" className="mt-[var(--layout-space-loose)]">
+          <section className="flex gap-[var(--layout-space-loose)] items-start">
+            <ScoreCard className="flex-1 min-w-0">
+              <StatKeyCard metric={LEADERSHIP_SUCCESSION_COVERAGE} />
+            </ScoreCard>
+            <ScoreCard className="flex-1 min-w-0">
+              <StatKeyCard metric={LEADERSHIP_READY_NOW_SUCCESSOR_RATIO} />
+            </ScoreCard>
           </section>
         </TabsContent>
       </Tabs>
@@ -835,11 +975,12 @@ export default function App() {
   const [activeId, setActiveId] = useState<string>('overview')
   const [org, setOrg] = useState('overall')
 
-  // 'talent' 走專屬 TalentPage(tab + key/leading drill-down),不套用其餘 pillar 共用的
-  // PillarDetailPage template(見 PillarId type 註解)。
+  // 'talent' / 'leadership' 走各自專屬頁面(tab + key/leading drill-down),不套用其餘 pillar
+  // 共用的 PillarDetailPage template(見 PillarId type 註解)。
   const isTalent = activeId === 'talent'
-  const activePillar = !isTalent && activeId in PILLAR_DETAILS ? PILLAR_DETAILS[activeId as PillarId] : undefined
-  const pageTitle = isTalent ? 'Talent' : activePillar ? `${activePillar.label} Detail` : 'Overall'
+  const isLeadership = activeId === 'leadership'
+  const activePillar = !isTalent && !isLeadership && activeId in PILLAR_DETAILS ? PILLAR_DETAILS[activeId as PillarId] : undefined
+  const pageTitle = isTalent ? 'Talent' : isLeadership ? 'Leadership' : activePillar ? `${activePillar.label} Detail` : 'Overall'
 
   return (
     <TooltipProvider delayDuration={500} skipDelayDuration={300}>
@@ -853,7 +994,7 @@ export default function App() {
           sidebar={<AppSidebar />}
           header={<PageHeader title={pageTitle} org={org} onOrgChange={setOrg} />}
         >
-          {isTalent ? <TalentPage /> : activePillar ? <PillarDetailPage pillar={activePillar} /> : <OverviewPage />}
+          {isTalent ? <TalentPage /> : isLeadership ? <LeadershipPage /> : activePillar ? <PillarDetailPage pillar={activePillar} /> : <OverviewPage />}
         </AppShell>
       </SidebarProvider>
     </TooltipProvider>
