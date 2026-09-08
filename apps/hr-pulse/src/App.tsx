@@ -171,12 +171,22 @@ function CardTitleWithUpdated({ title, updatedAt, size = 'h3' }: { title: string
 }
 
 // ── Overview: Turnover rate(折線,三系列)+ Hiring gap(長條)── 皆為 2026 假數字,待接真實資料源。
-// 2026-08-28 user 指定三系列改名;Q4(最新季)= user 給定數值 3.4/2.7/2.3,Q1-Q3 為對齊該量級的假波動(假數字)。
+// 2026-09-08 user 指定改成 monthly(原為 quarterly)—— 12 個月,Dec 沿用原本「當季(Q4)」數值
+// 3.4/2.7/2.3(user 給定當前值),其餘月份為對齊各季平均量級的假波動(假數字)。
+const MONTH_ABBR = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
 const TURNOVER_TREND = [
-  { quarter: '2026 Q1', turnover: 3.7, newcomer: 2.4, voluntary: 2.6 },
-  { quarter: '2026 Q2', turnover: 3.1, newcomer: 3.0, voluntary: 2.1 },
-  { quarter: '2026 Q3', turnover: 3.6, newcomer: 2.5, voluntary: 2.5 },
-  { quarter: '2026 Q4', turnover: 3.4, newcomer: 2.7, voluntary: 2.3 },
+  { month: '2026/01', turnover: 3.8, newcomer: 2.3, voluntary: 2.7 },
+  { month: '2026/02', turnover: 3.7, newcomer: 2.4, voluntary: 2.6 },
+  { month: '2026/03', turnover: 3.6, newcomer: 2.5, voluntary: 2.5 },
+  { month: '2026/04', turnover: 3.3, newcomer: 2.8, voluntary: 2.2 },
+  { month: '2026/05', turnover: 3.0, newcomer: 3.1, voluntary: 2.0 },
+  { month: '2026/06', turnover: 3.0, newcomer: 3.1, voluntary: 2.1 },
+  { month: '2026/07', turnover: 3.5, newcomer: 2.4, voluntary: 2.4 },
+  { month: '2026/08', turnover: 3.7, newcomer: 2.5, voluntary: 2.5 },
+  { month: '2026/09', turnover: 3.6, newcomer: 2.6, voluntary: 2.6 },
+  { month: '2026/10', turnover: 3.5, newcomer: 2.6, voluntary: 2.2 },
+  { month: '2026/11', turnover: 3.3, newcomer: 2.8, voluntary: 2.3 },
+  { month: '2026/12', turnover: 3.4, newcomer: 2.7, voluntary: 2.3 },
 ]
 const turnoverConfig = {
   turnover: { label: 'Turnover', color: 'var(--chart-1)' },
@@ -1022,9 +1032,28 @@ function OverviewPage() {
           <ChartContainer config={turnoverConfig} className="flex-1 min-h-0 mt-[var(--layout-space-loose)]">
             <LineChart accessibilityLayer data={TURNOVER_TREND}>
               <CartesianGrid vertical={false} />
-              <XAxis dataKey="quarter" tickLine={false} axisLine={false} tickMargin={8} />
+              {/* 12 個月改用短月份縮寫(Jan/Feb/...)顯示,對齊本檔其餘英文文案語系(非中文「月」)。 */}
+              <XAxis
+                dataKey="month"
+                tickLine={false}
+                axisLine={false}
+                tickMargin={8}
+                interval={0}
+                padding={{ left: 12, right: 12 }}
+                tickFormatter={(v: string) => MONTH_ABBR[Number(v.slice(5)) - 1]}
+              />
               <YAxis tickLine={false} axisLine={false} width={28} domain={[0, 10]} />
-              <ChartTooltip content={<ChartTooltipContent indicator="line" />} />
+              <ChartTooltip
+                content={
+                  <ChartTooltipContent
+                    indicator="line"
+                    labelFormatter={(label: unknown) => {
+                      const v = String(label)
+                      return `${MONTH_ABBR[Number(v.slice(5)) - 1]} ${v.slice(0, 4)}`
+                    }}
+                  />
+                }
+              />
               {/* Recharts Legend 預設依 dataKey 字母排序(newcomer < turnover < voluntary),
                   跟 user 指定「Turnover / Newcomer turnover / Voluntary turnover」順序不同 —
                   改用自訂 content function,直接照 turnoverConfig 順序畫,不經 recharts 自動排序
