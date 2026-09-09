@@ -149,23 +149,39 @@ function KeyInfoDeltaTag({ delta }: { delta: Delta }) {
   )
 }
 
-// 卡片標題旁的「上次更新」提示 —— hover icon 才顯示時間,不佔用標題列空間。
+// 卡片標題旁的 (!) 提示 —— hover icon 才顯示內容,不佔用標題列空間。
 // @story-baseline: @qijenchen/design-system/components/Tooltip/tooltip.stories.tsx
 // size='h3'(預設)= Overview 圖表卡片標題級距(24/130,designer 指定);size='body' = 緊湊 Key card
-// 標題(Talent/Leadership Key card 同一字級,text-body font-bold),避免長 label(如「People Manager
-// Effectiveness」)在窄卡片內用 h3 折兩行、跟同排短 label 的卡片比例不一致。
-function CardTitleWithUpdated({ title, updatedAt, size = 'h3' }: { title: string; updatedAt: string; size?: 'h3' | 'body' }) {
+// 標題(text-body font-bold);size='card' = Overview KeyInfoCard 同一字級(text-body-lg font-medium)——
+// Talent/Leadership Leading data 標題用,比 Key(h3)小一級但比舊版 caption 大,呈現 key/leading 從屬關係。
+// description 優先於 updatedAt(Talent 頁 user 指定 (!) 顯示名詞解釋,取代 Overview 既有的更新時間)。
+function CardTitleWithUpdated({
+  title,
+  updatedAt,
+  description,
+  size = 'h3',
+}: {
+  title: string
+  updatedAt?: string
+  description?: string
+  size?: 'h3' | 'body' | 'card'
+}) {
+  const tooltipContent = description ?? (updatedAt ? `Latest update: ${updatedAt}` : undefined)
+  const titleClass =
+    size === 'h3' ? 'text-h3 font-medium' : size === 'card' ? 'text-body-lg font-medium text-foreground' : 'text-body font-bold'
   return (
     <div className="flex items-center gap-[var(--layout-space-tight)]">
-      <span className={size === 'h3' ? 'text-h3 font-medium' : 'text-body font-bold'}>{title}</span>
-      <Tooltip>
-        <TooltipTrigger asChild>
-          <span className="inline-flex items-center text-fg-muted cursor-default" aria-label={`Latest update ${updatedAt}`}>
-            <Info size={14} />
-          </span>
-        </TooltipTrigger>
-        <TooltipContent>Latest update: {updatedAt}</TooltipContent>
-      </Tooltip>
+      <span className={titleClass}>{title}</span>
+      {tooltipContent && (
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <span className="inline-flex items-center text-fg-muted cursor-default flex-none" aria-label={tooltipContent}>
+              <Info size={14} />
+            </span>
+          </TooltipTrigger>
+          <TooltipContent>{tooltipContent}</TooltipContent>
+        </Tooltip>
+      )}
     </div>
   )
 }
@@ -384,13 +400,16 @@ type MetricDatum = {
   deltaSuffix?: string
   /** 選填:(!) hover 顯示的最後更新時間(CardTitleWithUpdated)。無則標題不帶 (!) icon。 */
   updatedAt?: string
+  /** 選填:(!) hover 顯示的名詞解釋(CardTitleWithUpdated,優先於 updatedAt)。Talent 頁 user 指定要顯示
+   * 這個,取代 updatedAt(皆為假文案,待接真實 methodology note)。 */
+  description?: string
 }
 
 type KeyMetricDatum = MetricDatum & { leading?: MetricDatum[] }
 
 // user 給定:Headcount Fulfilment Gap 58%(圓餅圖,滿分 100%),帶 3 個 Leading data。
 // delta/updatedAt:Talent page2(KeyWithLeadingSwitcher)consume,與既有 trend(56→58)一致算出 +2;
-// Talent page1 的 KeyMetricCard 不讀這兩個選填欄位,對 page1 無影響。
+// description:Talent page1(KeyMetricCard)(!) hover 用,取代 updatedAt(皆為假文案)。
 const HEADCOUNT_FULFILMENT_GAP: KeyMetricDatum = {
   id: 'headcount-fulfilment-gap',
   label: 'Headcount Fulfilment Gap',
@@ -401,10 +420,25 @@ const HEADCOUNT_FULFILMENT_GAP: KeyMetricDatum = {
   delta: { direction: 'up', text: '+2' },
   deltaSuffix: 'vs 2026 Q3',
   updatedAt: '2026/08/26 06:00',
+  description: '% of approved headcount successfully filled against the current quarter plan.',
   leading: [
-    { id: 'mobility-willingness-rate', label: 'Mobility willingness rate', value: 35, displayValue: '35%', unit: 'percent', trend: quarterlySeries(30, 32, 34, 35) },
-    { id: 'assignee-experience', label: 'Assignee experience', value: 27, displayValue: '27%', unit: 'percent', trend: quarterlySeries(24, 25, 26, 27) },
-    { id: 'time-to-fill-fulfilment-gap', label: 'Time to fill', value: 49, displayValue: '49 days', unit: 'days', trend: quarterlySeries(55, 53, 51, 49) },
+    {
+      id: 'mobility-willingness-rate', label: 'Mobility willingness rate', value: 35, displayValue: '35%', unit: 'percent',
+      trend: quarterlySeries(30, 32, 34, 35), delta: { direction: 'up', text: '+1' }, deltaSuffix: 'vs 2026 Q3',
+      description: '% of employees indicating willingness to relocate or take an internal transfer (latest engagement survey).',
+    },
+    {
+      id: 'assignee-experience', label: 'Assignee experience', value: 27, displayValue: '27%', unit: 'percent',
+      trend: quarterlySeries(24, 25, 26, 27), delta: { direction: 'up', text: '+1' }, deltaSuffix: 'vs 2026 Q3',
+      description: '% of internationally assigned employees rating their assignment experience positively (annual mobility survey).',
+    },
+    // 2026-09-09 user 指定改成 21 days;指定「速度變快」= 改善,方向改用 up(綠色 + 上升箭頭),
+    // 即使天數本身是下降(-5)——箭頭/顏色語意 = 「變好」而非「數字變大」(user verbatim 決策)。
+    {
+      id: 'time-to-fill-fulfilment-gap', label: 'Time to fill', value: 21, displayValue: '21 days', unit: 'days',
+      trend: quarterlySeries(32, 29, 26, 21), delta: { direction: 'up', text: '-5' }, deltaSuffix: 'vs 2026 Q3',
+      description: 'Average calendar days from requisition approval to offer acceptance.',
+    },
   ],
 }
 
@@ -419,9 +453,18 @@ const CRITICAL_ROLES_VACANCY_RATIO: KeyMetricDatum = {
   delta: { direction: 'down', text: '-1' },
   deltaSuffix: 'vs 2026 Q3',
   updatedAt: '2026/08/26 06:00',
+  description: '% of designated critical roles currently unfilled, relative to total critical-role headcount.',
   leading: [
-    { id: 'time-to-fill-vacancy-ratio', label: 'Time to fill', value: 68, displayValue: '68 days', unit: 'days', trend: quarterlySeries(74, 72, 70, 68) },
-    { id: 'internal-fill-managers', label: 'Internal fill (managers)', value: 95, displayValue: '95 days', unit: 'days', trend: quarterlySeries(102, 100, 97, 95) },
+    {
+      id: 'time-to-fill-vacancy-ratio', label: 'Time to fill', value: 68, displayValue: '68 days', unit: 'days',
+      trend: quarterlySeries(74, 72, 70, 68), delta: { direction: 'up', text: '-2' }, deltaSuffix: 'vs 2026 Q3',
+      description: 'Average calendar days to fill a critical role, from requisition open to offer acceptance.',
+    },
+    {
+      id: 'internal-fill-managers', label: 'Internal fill (managers)', value: 95, displayValue: '95 days', unit: 'days',
+      trend: quarterlySeries(102, 100, 97, 95), delta: { direction: 'up', text: '-2' }, deltaSuffix: 'vs 2026 Q3',
+      description: 'Average calendar days to fill a vacant manager role with an internal candidate.',
+    },
   ],
 }
 
@@ -429,10 +472,26 @@ const LEADERSHIP_DEVELOPMENT_KEYS: KeyMetricDatum[] = [HEADCOUNT_FULFILMENT_GAP,
 
 // user 指定「先幫我放假數字」—— 4 張皆為假數字,待接真實資料源;無 Leading data(user 未提供)。
 const TALENT_PRODUCTIVITY_KEYS: KeyMetricDatum[] = [
-  { id: 'new-hire-performance', label: 'New Hire Performance', value: 42, displayValue: '42%', unit: 'percent', trend: quarterlySeries(36, 38, 40, 42) },
-  { id: 'quality-of-hire', label: 'Quality of Hire — Hiring Manager Satisfaction', value: 88, displayValue: '88%', unit: 'percent', trend: quarterlySeries(84, 85, 87, 88) },
-  { id: 'revenue-per-employee', label: 'Revenue per Employee', value: 215000, displayValue: '$215K', unit: 'currency', trend: quarterlySeries(198000, 205000, 210000, 215000) },
-  { id: 'profit-per-employee', label: 'Profit per Employee', value: 48000, displayValue: '$48K', unit: 'currency', trend: quarterlySeries(41000, 43000, 46000, 48000) },
+  {
+    id: 'new-hire-performance', label: 'New Hire Performance', value: 42, displayValue: '42%', unit: 'percent',
+    trend: quarterlySeries(36, 38, 40, 42), delta: { direction: 'up', text: '+2' }, deltaSuffix: 'vs 2026 Q3',
+    description: '% of new hires rated S+ or above (top ~35%) in their first performance review.',
+  },
+  {
+    id: 'quality-of-hire', label: 'Quality of Hire — Hiring Manager Satisfaction', value: 88, displayValue: '88%', unit: 'percent',
+    trend: quarterlySeries(84, 85, 87, 88), delta: { direction: 'up', text: '+1' }, deltaSuffix: 'vs 2026 Q3',
+    description: '% of hiring managers rating new hire quality as satisfactory or above (post-90-day survey).',
+  },
+  {
+    id: 'revenue-per-employee', label: 'Revenue per Employee', value: 215000, displayValue: '$215K', unit: 'currency',
+    trend: quarterlySeries(198000, 205000, 210000, 215000), delta: { direction: 'up', text: '+$5K' }, deltaSuffix: 'vs 2026 Q3',
+    description: 'Trailing 12-month company revenue divided by average headcount.',
+  },
+  {
+    id: 'profit-per-employee', label: 'Profit per Employee', value: 48000, displayValue: '$48K', unit: 'currency',
+    trend: quarterlySeries(41000, 43000, 46000, 48000), delta: { direction: 'up', text: '+$2K' }, deltaSuffix: 'vs 2026 Q3',
+    description: 'Trailing 12-month operating profit divided by average headcount.',
+  },
 ]
 
 // Key metric 的達成率指示(滿分 100%)—— 直接消費 DS CircularProgress(determinate ring:
@@ -469,28 +528,39 @@ function MetricTrendChart({ data }: { data: QuarterPoint[] }) {
   )
 }
 
-// Key metric 卡片:圓餅圖(percent)或大數字(currency)+ 點擊展開季度趨勢;若帶 Leading data,
-// 縮排展示在卡片下半部(視覺上明確從屬於該 Key)。展開/收合皆用 DS Accordion(非手刻 chevron 按鈕)——
-// Key 自己是獨立單一 item 的 Accordion(type="single" collapsible),Leading 群組是另一個
-// type="multiple" 的 Accordion(各自獨立展開,互不影響)。
+// 2026-09-09 user 三點指定重排本卡:
+//   1.「2026 Q1-Q4 Trend」標題跟著圖表走,移進收合面板(AccordionContent)內,不再常駐 trigger 列。
+//   2. Key / Leading 都比照 Overview KeyInfoCard 呈現:標題+(!) → 大數字 → delta tag(+X%/-X% vs 2026 Q3),
+//      (!) hover 顯示名詞解釋(CardTitleWithUpdated description,取代 updatedAt)。
+//   3. Leading 標題字級提升到跟 Overview「New Hire Performance」同級(CardTitleWithUpdated size="card")。
+//   4. Key 標題同步加大(size="h3",比 Leading 的 "card" 大一級),讓 Key/Leading 從屬關係看得出來;
+//      Leading 數字也放大到 text-h2(user 追加指定:「這些是 user 要看的重點」),不再是縮排小字。
+// 展開/收合皆用 DS Accordion(非手刻 chevron 按鈕)—— Key 自己是獨立單一 item 的 Accordion
+// (type="single" collapsible),Leading 群組是另一個 type="multiple" 的 Accordion(各自獨立展開,互不影響)。
 // @story-baseline: @qijenchen/design-system/components/Accordion/accordion.stories.tsx#Default
 function KeyMetricCard({ metric, donutSize = 'md' }: { metric: KeyMetricDatum; donutSize?: 'md' | 'sm' }) {
   return (
     <ScoreCard className="flex-1 min-w-0 flex flex-col">
-      <div className="text-body font-bold">{metric.label}</div>
+      <CardTitleWithUpdated title={metric.label} description={metric.description} size="h3" />
       <Accordion type="single" collapsible className="mt-[var(--layout-space-loose)]">
         <AccordionItem value={metric.id} className="border-b-0">
-          <AccordionTrigger className="py-[var(--layout-space-tight)]">
-            <div className="flex items-center gap-[var(--layout-space-loose)]">
+          <AccordionTrigger className="items-start py-[var(--layout-space-tight)]">
+            <div className="flex flex-col">
               {metric.unit === 'percent' ? (
                 <KeyProgressRing value={metric.value} displayValue={metric.displayValue} size={donutSize} />
               ) : (
                 <span className="text-h2 font-bold tabular-nums">{metric.displayValue}</span>
               )}
-              <span className="text-caption font-normal text-fg-muted">2026 Q1–Q4 trend</span>
+              {metric.delta && (
+                <div className="mt-[var(--layout-space-tight)] flex items-center gap-[var(--layout-space-tight)]">
+                  <KeyInfoDeltaTag delta={metric.delta} />
+                  {metric.deltaSuffix && <span className="text-caption text-fg-muted">{metric.deltaSuffix}</span>}
+                </div>
+              )}
             </div>
           </AccordionTrigger>
           <AccordionContent>
+            <div className="text-caption font-medium text-fg-muted">2026 Q1–Q4 Trend</div>
             <MetricTrendChart data={metric.trend} />
           </AccordionContent>
         </AccordionItem>
@@ -502,13 +572,20 @@ function KeyMetricCard({ metric, donutSize = 'md' }: { metric: KeyMetricDatum; d
           <Accordion type="multiple" className="mt-[var(--layout-space-tight)]">
             {metric.leading.map((m) => (
               <AccordionItem key={m.id} value={m.id}>
-                <AccordionTrigger className="py-[var(--layout-space-tight)] text-body">
-                  <div className="flex flex-1 items-center justify-between gap-[var(--layout-space-tight)]">
-                    <span className="text-caption font-normal text-fg-secondary">{m.label}</span>
-                    <span className="font-medium tabular-nums">{m.displayValue}</span>
+                <AccordionTrigger className="items-start py-[var(--layout-space-tight)]">
+                  <div className="flex flex-1 flex-col">
+                    <CardTitleWithUpdated title={m.label} description={m.description} size="card" />
+                    <span className="text-h2 font-bold tabular-nums mt-[var(--layout-space-loose)]">{m.displayValue}</span>
+                    {m.delta && (
+                      <div className="mt-[var(--layout-space-tight)] flex items-center gap-[var(--layout-space-tight)]">
+                        <KeyInfoDeltaTag delta={m.delta} />
+                        {m.deltaSuffix && <span className="text-caption text-fg-muted">{m.deltaSuffix}</span>}
+                      </div>
+                    )}
                   </div>
                 </AccordionTrigger>
                 <AccordionContent>
+                  <div className="text-caption font-medium text-fg-muted">2026 Q1–Q4 Trend</div>
                   <MetricTrendChart data={m.trend} />
                 </AccordionContent>
               </AccordionItem>
