@@ -1177,7 +1177,7 @@ export default function App() {
         ? 'Leadership'
         : activePillar
           ? `${activePillar.label} Detail`
-          : 'Overall'
+          : '2026 Q4 Overview'
 
   return (
     <TooltipProvider delayDuration={500} skipDelayDuration={300}>
