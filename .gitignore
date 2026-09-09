@@ -49,3 +49,7 @@ coverage/
 # Netlify CLI per-user state(`netlify link` / `setup:netlify` 產生,含 site id /
 # auth — 必 per-user 不可共享)
 .netlify/
+
+# Ad-hoc Playwright verification scripts written to repo root during agent sessions
+# (should live under the session scratchpad, not the repo — ignored as a backstop)
+*.tmp.mjs
