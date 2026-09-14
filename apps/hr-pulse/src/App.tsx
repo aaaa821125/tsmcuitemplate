@@ -430,26 +430,28 @@ const HEADCOUNT_FULFILMENT_GAP: KeyMetricDatum = {
   displayValue: '58%',
   unit: 'percent',
   trend: quarterlySeries(51, 54, 56, 58),
-  delta: { direction: 'up', text: '+2' },
+  delta: { direction: 'up', text: '+2%' },
   deltaSuffix: 'vs 2026 Q3',
   updatedAt: '2026/08/26 06:00',
   description: '% of approved headcount successfully filled against the current quarter plan.',
+  // 2026-09-14 user 指定:delta 的單位要對應該筆數字自己的 unit(percent → %,days → days),
+  // 不能全部都是裸數字(之前 +1/-2/-5 沒帶單位,跟 Overview KeyInfoCard 的 +2%/-5% 慣例不一致)。
   leading: [
     {
       id: 'mobility-willingness-rate', label: 'Mobility willingness rate', value: 35, displayValue: '35%', unit: 'percent',
-      trend: quarterlySeries(30, 32, 34, 35), delta: { direction: 'up', text: '+1' }, deltaSuffix: 'vs 2026 Q3',
+      trend: quarterlySeries(30, 32, 34, 35), delta: { direction: 'up', text: '+1%' }, deltaSuffix: 'vs 2026 Q3',
       description: '% of employees indicating willingness to relocate or take an internal transfer (latest engagement survey).',
     },
     {
       id: 'assignee-experience', label: 'Assignee experience', value: 27, displayValue: '27%', unit: 'percent',
-      trend: quarterlySeries(24, 25, 26, 27), delta: { direction: 'up', text: '+1' }, deltaSuffix: 'vs 2026 Q3',
+      trend: quarterlySeries(24, 25, 26, 27), delta: { direction: 'up', text: '+1%' }, deltaSuffix: 'vs 2026 Q3',
       description: '% of internationally assigned employees rating their assignment experience positively (annual mobility survey).',
     },
     // 2026-09-09 user 指定改成 21 days;指定「速度變快」= 改善,方向改用 up(綠色 + 上升箭頭),
     // 即使天數本身是下降(-5)——箭頭/顏色語意 = 「變好」而非「數字變大」(user verbatim 決策)。
     {
       id: 'time-to-fill-fulfilment-gap', label: 'Time to fill', value: 21, displayValue: '21 days', unit: 'days',
-      trend: quarterlySeries(32, 29, 26, 21), delta: { direction: 'up', text: '-5' }, deltaSuffix: 'vs 2026 Q3',
+      trend: quarterlySeries(32, 29, 26, 21), delta: { direction: 'up', text: '-5 days' }, deltaSuffix: 'vs 2026 Q3',
       description: 'Average calendar days from requisition approval to offer acceptance.',
     },
   ],
@@ -463,19 +465,19 @@ const CRITICAL_ROLES_VACANCY_RATIO: KeyMetricDatum = {
   displayValue: '14%',
   unit: 'percent',
   trend: quarterlySeries(18, 17, 15, 14),
-  delta: { direction: 'down', text: '-1' },
+  delta: { direction: 'down', text: '-1%' },
   deltaSuffix: 'vs 2026 Q3',
   updatedAt: '2026/08/26 06:00',
   description: '% of designated critical roles currently unfilled, relative to total critical-role headcount.',
   leading: [
     {
       id: 'time-to-fill-vacancy-ratio', label: 'Time to fill', value: 68, displayValue: '68 days', unit: 'days',
-      trend: quarterlySeries(74, 72, 70, 68), delta: { direction: 'up', text: '-2' }, deltaSuffix: 'vs 2026 Q3',
+      trend: quarterlySeries(74, 72, 70, 68), delta: { direction: 'up', text: '-2 days' }, deltaSuffix: 'vs 2026 Q3',
       description: 'Average calendar days to fill a critical role, from requisition open to offer acceptance.',
     },
     {
       id: 'internal-fill-managers', label: 'Internal fill (managers)', value: 95, displayValue: '95 days', unit: 'days',
-      trend: quarterlySeries(102, 100, 97, 95), delta: { direction: 'up', text: '-2' }, deltaSuffix: 'vs 2026 Q3',
+      trend: quarterlySeries(102, 100, 97, 95), delta: { direction: 'up', text: '-2 days' }, deltaSuffix: 'vs 2026 Q3',
       description: 'Average calendar days to fill a vacant manager role with an internal candidate.',
     },
   ],
@@ -487,12 +489,12 @@ const LEADERSHIP_DEVELOPMENT_KEYS: KeyMetricDatum[] = [HEADCOUNT_FULFILMENT_GAP,
 const TALENT_PRODUCTIVITY_KEYS: KeyMetricDatum[] = [
   {
     id: 'new-hire-performance', label: 'New Hire Performance', value: 42, displayValue: '42%', unit: 'percent',
-    trend: quarterlySeries(36, 38, 40, 42), delta: { direction: 'up', text: '+2' }, deltaSuffix: 'vs 2026 Q3',
+    trend: quarterlySeries(36, 38, 40, 42), delta: { direction: 'up', text: '+2%' }, deltaSuffix: 'vs 2026 Q3',
     description: '% of new hires rated S+ or above (top ~35%) in their first performance review.',
   },
   {
     id: 'quality-of-hire', label: 'Quality of Hire — Hiring Manager Satisfaction', value: 88, displayValue: '88%', unit: 'percent',
-    trend: quarterlySeries(84, 85, 87, 88), delta: { direction: 'up', text: '+1' }, deltaSuffix: 'vs 2026 Q3',
+    trend: quarterlySeries(84, 85, 87, 88), delta: { direction: 'up', text: '+1%' }, deltaSuffix: 'vs 2026 Q3',
     description: '% of hiring managers rating new hire quality as satisfactory or above (post-90-day survey).',
   },
   {
@@ -517,13 +519,14 @@ const TALENT_PRODUCTIVITY_KEYS: KeyMetricDatum[] = [
 // @story-baseline: @qijenchen/design-system/components/CircularProgress/circular-progress.stories.tsx
 // displayValue 由 caller 傳完整格式化字串(非固定補 %)—— Leadership 頁 Key(如「92」無 % 符號)
 // 與 Talent 頁 Key(如「58%」)共用同一元件,格式差異交給資料層 displayValue,不在此元件寫死。
+// 2026-09-14 user 指定:圈圈內數字字級要跟 Talent page2 的 KeyPieChart 一樣大(text-body-lg,非 text-caption)。
 function KeyProgressRing({ value, displayValue, size = 'md' }: { value: number; displayValue: string; size?: 'md' | 'sm' }) {
   const dim = size === 'md' ? 64 : 48
   const dimClass = size === 'md' ? 'w-16 h-16' : 'w-12 h-12'
   return (
     <div className={`relative flex-none ${dimClass}`}>
       <CircularProgress value={value} size={dim} />
-      <span className="pointer-events-none absolute inset-0 flex items-center justify-center text-caption font-bold tabular-nums">
+      <span className="pointer-events-none absolute inset-0 flex items-center justify-center text-body-lg font-bold tabular-nums">
         {displayValue}
       </span>
     </div>
@@ -598,10 +601,12 @@ function KeyMetricCard({ metric, donutSize = 'md' }: { metric: KeyMetricDatum; d
                 <AccordionTrigger className="items-start py-[var(--layout-space-tight)]">
                   <div className="flex flex-1 flex-col">
                     <CardTitleWithUpdated title={m.label} description={m.description} size="card" />
-                    <div className="mt-[var(--layout-space-loose)] flex items-center justify-between gap-[var(--layout-space-loose)]">
-                      <span className="text-h2 font-bold tabular-nums">{m.displayValue}</span>
+                    {/* 2026-09-14 user 指定:數字縮小(比重不再蓋過 Key),delta tag + vs 2026Q3 疊成兩行、
+                        靠左對齊、緊貼數字右側(gap-tight 留一點間距),不再撐滿整排寬度。 */}
+                    <div className="mt-[var(--layout-space-loose)] flex items-start gap-[var(--layout-space-tight)]">
+                      <span className="text-h3 font-bold tabular-nums">{m.displayValue}</span>
                       {m.delta && (
-                        <div className="flex items-center gap-[var(--layout-space-tight)]">
+                        <div className="flex flex-col items-start gap-[var(--layout-space-tight)]">
                           <KeyInfoDeltaTag delta={m.delta} />
                           {m.deltaSuffix && <span className="text-caption text-fg-muted">{m.deltaSuffix}</span>}
                         </div>
