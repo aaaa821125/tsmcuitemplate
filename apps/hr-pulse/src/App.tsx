@@ -24,6 +24,7 @@ import {
   BarChart,
   CartesianGrid,
   Cell,
+  LabelList,
   Line,
   LineChart,
   Pie,
@@ -186,22 +187,22 @@ function CardTitleWithUpdated({
 }
 
 // ── Overview: Turnover rate(折線,三系列)+ Hiring gap(長條)── 皆為 2026 假數字,待接真實資料源。
-// 2026-09-08 user 指定改成 monthly(原為 quarterly)—— 12 個月,Dec 沿用原本「當季(Q4)」數值
-// 3.4/2.7/2.3(user 給定當前值),其餘月份為對齊各季平均量級的假波動(假數字)。
+// 2026-09-08 user 指定改成 monthly(原為 quarterly)。
+// 2026-09-14 user 再指定改成「累進制」:Jan 起逐月累加,三系列皆單調遞增,全年不超過 3(user 給定上限)。
 const MONTH_ABBR = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
 const TURNOVER_TREND = [
-  { month: '2026/01', turnover: 3.8, newcomer: 2.3, voluntary: 2.7 },
-  { month: '2026/02', turnover: 3.7, newcomer: 2.4, voluntary: 2.6 },
-  { month: '2026/03', turnover: 3.6, newcomer: 2.5, voluntary: 2.5 },
-  { month: '2026/04', turnover: 3.3, newcomer: 2.8, voluntary: 2.2 },
-  { month: '2026/05', turnover: 3.0, newcomer: 3.1, voluntary: 2.0 },
-  { month: '2026/06', turnover: 3.0, newcomer: 3.1, voluntary: 2.1 },
-  { month: '2026/07', turnover: 3.5, newcomer: 2.4, voluntary: 2.4 },
-  { month: '2026/08', turnover: 3.7, newcomer: 2.5, voluntary: 2.5 },
-  { month: '2026/09', turnover: 3.6, newcomer: 2.6, voluntary: 2.6 },
-  { month: '2026/10', turnover: 3.5, newcomer: 2.6, voluntary: 2.2 },
-  { month: '2026/11', turnover: 3.3, newcomer: 2.8, voluntary: 2.3 },
-  { month: '2026/12', turnover: 3.4, newcomer: 2.7, voluntary: 2.3 },
+  { month: '2026/01', turnover: 0.3, newcomer: 0.2, voluntary: 0.1 },
+  { month: '2026/02', turnover: 0.6, newcomer: 0.4, voluntary: 0.3 },
+  { month: '2026/03', turnover: 0.9, newcomer: 0.6, voluntary: 0.5 },
+  { month: '2026/04', turnover: 1.2, newcomer: 0.8, voluntary: 0.7 },
+  { month: '2026/05', turnover: 1.5, newcomer: 1.0, voluntary: 0.9 },
+  { month: '2026/06', turnover: 1.8, newcomer: 1.2, voluntary: 1.1 },
+  { month: '2026/07', turnover: 2.0, newcomer: 1.4, voluntary: 1.3 },
+  { month: '2026/08', turnover: 2.2, newcomer: 1.6, voluntary: 1.5 },
+  { month: '2026/09', turnover: 2.4, newcomer: 1.8, voluntary: 1.7 },
+  { month: '2026/10', turnover: 2.6, newcomer: 2.0, voluntary: 1.9 },
+  { month: '2026/11', turnover: 2.8, newcomer: 2.2, voluntary: 2.1 },
+  { month: '2026/12', turnover: 3.0, newcomer: 2.4, voluntary: 2.3 },
 ]
 const turnoverConfig = {
   turnover: { label: 'Turnover', color: 'var(--chart-1)' },
@@ -209,15 +210,20 @@ const turnoverConfig = {
   voluntary: { label: 'Voluntary turnover', color: 'var(--chart-3)' },
 } satisfies ChartConfig
 
-// 2026-09-14 user 指定改成折線圖:兩條線分別是 IDL / DL 的 Gap 絕對數字(不再疊加 Approved/Budget,
-// 折線只顯示 Gap 本身,如「2026 Q1 IDL Gap 500」)。沿用同一組 Gap 假數字(僅拿掉不再消費的
-// Budget/Approved 欄位),量級對齊先前 bar chart 版本。
-type HiringGapRow = { quarter: string; idlGap: number; dlGap: number }
+// 2026-09-14 user 指定改成折線圖:兩條線分別是 IDL / DL 的 Gap 絕對數字。
+// 2026-09-14 user 再指定:Gap 改成 960 上下(DL Q1 給定 Budget 20,560 / Actual 17,500 /
+// Forecast 2,100 / Gap w/ TO 960,其餘 quarter × IDL/DL 皆為對齊 960 量級的假數字,
+// 每列都滿足 Budget − Actual − Forecast = Gap,供 hover 明細對得上折線數值)。
+type HiringGapRow = {
+  quarter: string
+  idlBudget: number; idlActual: number; idlForecast: number; idlGap: number
+  dlBudget: number; dlActual: number; dlForecast: number; dlGap: number
+}
 const HIRING_GAP_TREND: HiringGapRow[] = [
-  { quarter: '2026 Q1', idlGap: 300, dlGap: 560 },
-  { quarter: '2026 Q2', idlGap: 200, dlGap: 300 },
-  { quarter: '2026 Q3', idlGap: 200, dlGap: 150 },
-  { quarter: '2026 Q4', idlGap: 300, dlGap: 400 },
+  { quarter: '2026 Q1', idlBudget: 19200, idlActual: 16400, idlForecast: 1850, idlGap: 950, dlBudget: 20560, dlActual: 17500, dlForecast: 2100, dlGap: 960 },
+  { quarter: '2026 Q2', idlBudget: 18900, idlActual: 16150, idlForecast: 1805, idlGap: 945, dlBudget: 20200, dlActual: 17300, dlForecast: 2000, dlGap: 900 },
+  { quarter: '2026 Q3', idlBudget: 18700, idlActual: 15950, idlForecast: 1785, idlGap: 965, dlBudget: 19800, dlActual: 16950, dlForecast: 1900, dlGap: 950 },
+  { quarter: '2026 Q4', idlBudget: 19000, idlActual: 16200, idlForecast: 1845, idlGap: 955, dlBudget: 20100, dlActual: 17200, dlForecast: 1960, dlGap: 940 },
 ]
 // IDL 藍色 / DL 紫色(user 既有配色決策延續);折線是唯一系列,改用主色階(6)而非先前 bar 版本
 // 疊加用的淺色階(3),確保線條在白底上對比足夠。IDL 排最前面(順序帶動 legend 順序)。
@@ -225,6 +231,48 @@ const hiringGapConfig = {
   idlGap: { label: 'IDL Gap', color: 'var(--color-blue-6)' },
   dlGap: { label: 'DL Gap', color: 'var(--color-purple-6)' },
 } satisfies ChartConfig
+
+// 2026-09-14 user 指定:hover 各節點要具體列出 Budget / Actual / Forecast / Gap w/ TO 四個數字
+// (非只有折線本身的 Gap 值)。
+function hiringGapTooltipFormatter(value: unknown, _name: unknown, item: { dataKey?: string | number }, _index: number, payload: unknown) {
+  const key = String(item.dataKey) as 'idlGap' | 'dlGap'
+  const row = payload as HiringGapRow
+  const budget = key === 'idlGap' ? row.idlBudget : row.dlBudget
+  const actual = key === 'idlGap' ? row.idlActual : row.dlActual
+  const forecast = key === 'idlGap' ? row.idlForecast : row.dlForecast
+  const gap = Number(value)
+  return (
+    <div className="flex w-full flex-col gap-[var(--layout-space-tight)]">
+      <span className="flex items-center gap-[var(--layout-space-tight)] text-fg-secondary font-medium">
+        <Square size={8} fill={hiringGapConfig[key].color} stroke="none" />
+        {hiringGapConfig[key].label}
+      </span>
+      <div className="flex flex-col gap-[var(--layout-space-tight)] text-caption">
+        <div className="flex items-center justify-between gap-[var(--layout-space-loose)]">
+          <span className="text-fg-muted">Budget</span>
+          <span className="font-mono tabular-nums">{budget.toLocaleString()}</span>
+        </div>
+        <div className="flex items-center justify-between gap-[var(--layout-space-loose)]">
+          <span className="text-fg-muted">Actual</span>
+          <span className="font-mono tabular-nums">{actual.toLocaleString()}</span>
+        </div>
+        <div className="flex items-center justify-between gap-[var(--layout-space-loose)]">
+          <span className="text-fg-muted">Forecast</span>
+          <span className="font-mono tabular-nums">{forecast.toLocaleString()}</span>
+        </div>
+        <div className="flex items-center justify-between gap-[var(--layout-space-loose)]">
+          <span className="text-fg-muted">Gap w/ TO</span>
+          <span className="font-mono font-medium tabular-nums">{gap.toLocaleString()}</span>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// 節點上方常駐標籤(user 指定「直接寫在節點上面」,非只有 hover 才看得到)。
+function hiringGapLabelFormatter(label: unknown) {
+  return Number(label).toLocaleString()
+}
 
 // 統一時間格式:`<來源>, YYYY/MM/DD`(對齊 DS DatePicker 預設格式 —— date-picker.tsx:37
 // 「Default format:YYYY/MM/DD,year-first ISO-like,locale-independent」,非隨意 MMM D, YYYY)。
@@ -1011,11 +1059,13 @@ function OverviewPage() {
               2026-09-14 user 指定改成折線圖:IDL / DL 各一條線,只畫 Gap 絕對數字(如「2026 Q1 IDL Gap 500」)。
               @story-baseline: @qijenchen/design-system/components/Chart/chart.stories.tsx#LineChartResponseTime */}
           <ChartContainer config={hiringGapConfig} className="flex-1 min-h-0 mt-[var(--layout-space-loose)]">
-            <LineChart accessibilityLayer data={HIRING_GAP_TREND}>
+            <LineChart accessibilityLayer data={HIRING_GAP_TREND} margin={{ top: 20, right: 30, bottom: 12 }}>
               <CartesianGrid vertical={false} />
               <XAxis dataKey="quarter" tickLine={false} axisLine={false} tickMargin={8} />
-              <YAxis tickLine={false} axisLine={false} width={40} domain={[0, 'dataMax + 100']} />
-              <ChartTooltip content={<ChartTooltipContent indicator="line" />} />
+              {/* 數值集中在 ~900-970,固定 [0, dataMax] 會讓線幾乎貼平;改用貼緊資料範圍的動態 domain,
+                  上下各留白給節點常駐標籤(top)與 legend(bottom)。 */}
+              <YAxis tickLine={false} axisLine={false} width={40} domain={['dataMin - 60', 'dataMax + 40']} />
+              <ChartTooltip content={<ChartTooltipContent formatter={hiringGapTooltipFormatter} />} />
               {/* Recharts Legend 預設依 dataKey 字母排序(dlGap < idlGap)自動排 DL 在前,與 IDL 排最前面的要求相反 —
                   改用自訂 content function,直接照 hiringGapConfig 順序(IDL 先)畫,不經 recharts 自動排序
                   (同 Turnover rate legend 已用的手法)。 */}
@@ -1031,8 +1081,14 @@ function OverviewPage() {
                   </div>
                 )}
               />
-              <Line dataKey="idlGap" type="monotone" stroke="var(--color-idlGap)" strokeWidth={2} dot={{ r: 3 }} />
-              <Line dataKey="dlGap" type="monotone" stroke="var(--color-dlGap)" strokeWidth={2} dot={{ r: 3 }} />
+              {/* user 指定 Gap 數值要「直接寫在節點上面」,非只 hover 才看得到 —— 加 LabelList 常駐標籤。
+                  IDL 標在上方、DL 標在下方,避免兩條線數值接近(~900-970)時標籤互相重疊。 */}
+              <Line dataKey="idlGap" type="monotone" stroke="var(--color-idlGap)" strokeWidth={2} dot={{ r: 3 }}>
+                <LabelList dataKey="idlGap" position="top" offset={10} formatter={hiringGapLabelFormatter} className="text-caption" style={{ fill: 'var(--color-idlGap)' }} />
+              </Line>
+              <Line dataKey="dlGap" type="monotone" stroke="var(--color-dlGap)" strokeWidth={2} dot={{ r: 3 }}>
+                <LabelList dataKey="dlGap" position="bottom" offset={10} formatter={hiringGapLabelFormatter} className="text-caption" style={{ fill: 'var(--color-dlGap)' }} />
+              </Line>
             </LineChart>
           </ChartContainer>
         </ScoreCard>
@@ -1053,7 +1109,8 @@ function OverviewPage() {
                 padding={{ left: 12, right: 12 }}
                 tickFormatter={(v: string) => MONTH_ABBR[Number(v.slice(5)) - 1]}
               />
-              <YAxis tickLine={false} axisLine={false} width={28} domain={[0, 10]} />
+              {/* 累進制資料全年落在 0-3(user 給定上限),固定 [0, 10] 會讓線貼底看不出成長曲線 —— 改用 [0, 3]。 */}
+              <YAxis tickLine={false} axisLine={false} width={28} domain={[0, 3]} />
               <ChartTooltip
                 content={
                   <ChartTooltipContent
