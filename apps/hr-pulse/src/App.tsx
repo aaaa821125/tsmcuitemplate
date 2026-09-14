@@ -509,16 +509,23 @@ const TALENT_PRODUCTIVITY_KEYS: KeyMetricDatum[] = [
 
 // Key metric 的達成率指示(滿分 100%)—— 直接消費 DS CircularProgress(determinate ring:
 // 可見 track `var(--secondary)` + 進度 arc),而非手刻 Pie/Cell donut(踩過 --divider track
-// 幾乎透明看不見的坑)。數值放 ring 右側(DS 決策:CircularProgress 不支援置中 affix,
-// 見 circular-progress.tsx docblock「不設 status prop」段同一 anti-over-designing 立場)。
+// 幾乎透明看不見的坑)。
+// 2026-09-14 user 指定數值要寫「到圈圈裡面」:CircularProgress 本身不支援置中 affix(DS 決策,
+// 見 circular-progress.tsx docblock「不設 status prop」段同一 anti-over-designing 立場)——
+// consumer 端用標準 relative/absolute overlay 疊加置中文字(同一手法已用於 Button overlayBadge),
+// 疊在 ring 上面而非修改/重造 ring 本身,仍是消費 DS 元件的視覺輸出,非繞過。
 // @story-baseline: @qijenchen/design-system/components/CircularProgress/circular-progress.stories.tsx
 // displayValue 由 caller 傳完整格式化字串(非固定補 %)—— Leadership 頁 Key(如「92」無 % 符號)
 // 與 Talent 頁 Key(如「58%」)共用同一元件,格式差異交給資料層 displayValue,不在此元件寫死。
 function KeyProgressRing({ value, displayValue, size = 'md' }: { value: number; displayValue: string; size?: 'md' | 'sm' }) {
+  const dim = size === 'md' ? 64 : 48
+  const dimClass = size === 'md' ? 'w-16 h-16' : 'w-12 h-12'
   return (
-    <div className="flex items-center gap-[var(--layout-space-tight)]">
-      <CircularProgress value={value} size={size === 'md' ? 64 : 48} />
-      <span className="text-h2 font-bold tabular-nums">{displayValue}</span>
+    <div className={`relative flex-none ${dimClass}`}>
+      <CircularProgress value={value} size={dim} />
+      <span className="pointer-events-none absolute inset-0 flex items-center justify-center text-caption font-bold tabular-nums">
+        {displayValue}
+      </span>
     </div>
   )
 }
@@ -551,21 +558,24 @@ function MetricTrendChart({ data }: { data: QuarterPoint[] }) {
 // 展開/收合皆用 DS Accordion(非手刻 chevron 按鈕)—— Key 自己是獨立單一 item 的 Accordion
 // (type="single" collapsible),Leading 群組是另一個 type="multiple" 的 Accordion(各自獨立展開,互不影響)。
 // @story-baseline: @qijenchen/design-system/components/Accordion/accordion.stories.tsx#Default
+// 2026-09-14 user 再指定:數值改寫進 ring 裡面(見 KeyProgressRing)後,ring 旁邊空出的寬度不能空著——
+// 把 delta tag 從「疊在數值下面」改成「排在數值/ring 右側」(trigger 內容用 justify-between 撐滿整列寬),
+// Leading 列同步比照(數字左、delta 右),讓整張卡片橫向填滿,不再右側大片留白。
 function KeyMetricCard({ metric, donutSize = 'md' }: { metric: KeyMetricDatum; donutSize?: 'md' | 'sm' }) {
   return (
     <ScoreCard className="flex-1 min-w-0 flex flex-col">
       <CardTitleWithUpdated title={metric.label} description={metric.description} size="h3" />
       <Accordion type="single" collapsible className="mt-[var(--layout-space-loose)]">
         <AccordionItem value={metric.id} className="border-b-0">
-          <AccordionTrigger className="items-start py-[var(--layout-space-tight)]">
-            <div className="flex flex-col">
+          <AccordionTrigger className="py-[var(--layout-space-tight)]">
+            <div className="flex flex-1 items-center justify-between gap-[var(--layout-space-loose)]">
               {metric.unit === 'percent' ? (
                 <KeyProgressRing value={metric.value} displayValue={metric.displayValue} size={donutSize} />
               ) : (
                 <span className="text-h2 font-bold tabular-nums">{metric.displayValue}</span>
               )}
               {metric.delta && (
-                <div className="mt-[var(--layout-space-tight)] flex items-center gap-[var(--layout-space-tight)]">
+                <div className="flex items-center gap-[var(--layout-space-tight)]">
                   <KeyInfoDeltaTag delta={metric.delta} />
                   {metric.deltaSuffix && <span className="text-caption text-fg-muted">{metric.deltaSuffix}</span>}
                 </div>
@@ -588,13 +598,15 @@ function KeyMetricCard({ metric, donutSize = 'md' }: { metric: KeyMetricDatum; d
                 <AccordionTrigger className="items-start py-[var(--layout-space-tight)]">
                   <div className="flex flex-1 flex-col">
                     <CardTitleWithUpdated title={m.label} description={m.description} size="card" />
-                    <span className="text-h2 font-bold tabular-nums mt-[var(--layout-space-loose)]">{m.displayValue}</span>
-                    {m.delta && (
-                      <div className="mt-[var(--layout-space-tight)] flex items-center gap-[var(--layout-space-tight)]">
-                        <KeyInfoDeltaTag delta={m.delta} />
-                        {m.deltaSuffix && <span className="text-caption text-fg-muted">{m.deltaSuffix}</span>}
-                      </div>
-                    )}
+                    <div className="mt-[var(--layout-space-loose)] flex items-center justify-between gap-[var(--layout-space-loose)]">
+                      <span className="text-h2 font-bold tabular-nums">{m.displayValue}</span>
+                      {m.delta && (
+                        <div className="flex items-center gap-[var(--layout-space-tight)]">
+                          <KeyInfoDeltaTag delta={m.delta} />
+                          {m.deltaSuffix && <span className="text-caption text-fg-muted">{m.deltaSuffix}</span>}
+                        </div>
+                      )}
+                    </div>
                   </div>
                 </AccordionTrigger>
                 <AccordionContent>
