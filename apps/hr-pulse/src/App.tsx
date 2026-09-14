@@ -24,7 +24,6 @@ import {
   BarChart,
   CartesianGrid,
   Cell,
-  LabelList,
   Line,
   LineChart,
   Pie,
@@ -210,56 +209,22 @@ const turnoverConfig = {
   voluntary: { label: 'Voluntary turnover', color: 'var(--chart-3)' },
 } satisfies ChartConfig
 
-// 2026-08-28 user 指定改版:同 Quarter 兩條(DL 紫色/IDL 藍色),各自 Approved(深)+ Gap(淺)疊加至 Budget、
-// 長條上方標「+Gap」註記。僅給 DL 範例(Budget 20,560/Approved 20,000/Gap 560)當 Q1 DL,其餘為對齊範例量級的假數字。
-type HiringGapRow = {
-  quarter: string
-  dlBudget: number; dlApproved: number; dlGap: number
-  idlBudget: number; idlApproved: number; idlGap: number
-}
-// 2026-08-28 user 指定 DL/IDL 假數字量級改接近,方便共用同一條 10,000 起始 Y 軸都看得清楚。
+// 2026-09-14 user 指定改成折線圖:兩條線分別是 IDL / DL 的 Gap 絕對數字(不再疊加 Approved/Budget,
+// 折線只顯示 Gap 本身,如「2026 Q1 IDL Gap 500」)。沿用同一組 Gap 假數字(僅拿掉不再消費的
+// Budget/Approved 欄位),量級對齊先前 bar chart 版本。
+type HiringGapRow = { quarter: string; idlGap: number; dlGap: number }
 const HIRING_GAP_TREND: HiringGapRow[] = [
-  { quarter: '2026 Q1', dlBudget: 20560, dlApproved: 20000, dlGap: 560, idlBudget: 19200, idlApproved: 18900, idlGap: 300 },
-  { quarter: '2026 Q2', dlBudget: 19800, dlApproved: 19500, dlGap: 300, idlBudget: 18600, idlApproved: 18400, idlGap: 200 },
-  { quarter: '2026 Q3', dlBudget: 18900, dlApproved: 18750, dlGap: 150, idlBudget: 17800, idlApproved: 17600, idlGap: 200 },
-  { quarter: '2026 Q4', dlBudget: 19200, dlApproved: 18800, dlGap: 400, idlBudget: 18000, idlApproved: 17700, idlGap: 300 },
+  { quarter: '2026 Q1', idlGap: 300, dlGap: 560 },
+  { quarter: '2026 Q2', idlGap: 200, dlGap: 300 },
+  { quarter: '2026 Q3', idlGap: 200, dlGap: 150 },
+  { quarter: '2026 Q4', idlGap: 300, dlGap: 400 },
 ]
-// 2026-08-28 user 指定改回原本紫/藍配色;IDL 排最前面(順序帶動長條左右排列 + legend 順序)。
+// IDL 藍色 / DL 紫色(user 既有配色決策延續);折線是唯一系列,改用主色階(6)而非先前 bar 版本
+// 疊加用的淺色階(3),確保線條在白底上對比足夠。IDL 排最前面(順序帶動 legend 順序)。
 const hiringGapConfig = {
-  idlApproved: { label: 'IDL Approved', color: 'var(--color-blue-6)' },
-  idlGap: { label: 'IDL Gap', color: 'var(--color-blue-3)' },
-  dlApproved: { label: 'DL Approved', color: 'var(--color-purple-6)' },
-  dlGap: { label: 'DL Gap', color: 'var(--color-purple-3)' },
+  idlGap: { label: 'IDL Gap', color: 'var(--color-blue-6)' },
+  dlGap: { label: 'DL Gap', color: 'var(--color-purple-6)' },
 } satisfies ChartConfig
-
-// 2026-08-28 user 指定 hover 只顯示 DL/IDL 的 Gap 數值和 %(Budget/Approved 不再顯示,保持最精簡)。
-function hiringGapTooltipFormatter(value: unknown, _name: unknown, item: { dataKey?: string | number }, _index: number, payload: unknown) {
-  const key = String(item.dataKey) as keyof typeof hiringGapConfig
-  if (key.endsWith('Approved')) return null
-
-  const row = payload as HiringGapRow
-  const budget = key.startsWith('dl') ? row.dlBudget : row.idlBudget
-  const gapValue = Number(value)
-  const pct = ((gapValue / budget) * 100).toFixed(1)
-  // user 指定 hover 詳情也比照 Turnover rate legend,前面加色塊區分 IDL / DL(同一組 Square icon 手法)。
-  return (
-    <div className="flex w-full flex-1 items-center justify-between gap-[var(--layout-space-tight)]">
-      <span className="flex items-center gap-[var(--layout-space-tight)] text-fg-secondary">
-        <Square size={8} fill={hiringGapConfig[key].color} stroke="none" />
-        {hiringGapConfig[key].label}
-      </span>
-      <span className="text-foreground font-mono font-medium tabular-nums">
-        {gapValue > 0 ? `+${gapValue.toLocaleString()}` : gapValue.toLocaleString()} ({pct}%)
-      </span>
-    </div>
-  )
-}
-
-// +Gap 長條上方註記 —— DS 無「root--small」token;text-caption 是 spec 文件標明的「圖表附註」用途 token,取代之。
-function hiringGapLabelFormatter(label: unknown) {
-  const value = Number(label)
-  return value > 0 ? `+${value.toLocaleString()}` : value.toLocaleString()
-}
 
 // 統一時間格式:`<來源>, YYYY/MM/DD`(對齊 DS DatePicker 預設格式 —— date-picker.tsx:37
 // 「Default format:YYYY/MM/DD,year-first ISO-like,locale-independent」,非隨意 MMM D, YYYY)。
@@ -1043,63 +1008,32 @@ function OverviewPage() {
         <ScoreCard className="flex-1 min-w-0 min-h-0 flex flex-col overflow-hidden">
           <CardTitleWithUpdated title="Hiring Gap" updatedAt="2026/08/26 06:00" />
           {/* 標題與圖表間距拉開至 16px(loose token,對齊 designer 規範下限)。
-              @story-baseline: @qijenchen/design-system/components/Chart/chart.stories.tsx#BarChartRevenue —
-              IDL 排前面(藍)、DL 排後面(紫),各自 Approved(深)+ Gap(淺)疊加。margin.top 為圖表 SVG 座標數值
-              (非 Tailwind spacing class,不受 layout-space 規則約束),留白給長條上方 +Gap 註記。
-              單一 Y 軸,起始 10,000、每格 1,000(user 指定)。 */}
+              2026-09-14 user 指定改成折線圖:IDL / DL 各一條線,只畫 Gap 絕對數字(如「2026 Q1 IDL Gap 500」)。
+              @story-baseline: @qijenchen/design-system/components/Chart/chart.stories.tsx#LineChartResponseTime */}
           <ChartContainer config={hiringGapConfig} className="flex-1 min-h-0 mt-[var(--layout-space-loose)]">
-            <BarChart accessibilityLayer data={HIRING_GAP_TREND} margin={{ top: 28 }}>
+            <LineChart accessibilityLayer data={HIRING_GAP_TREND}>
               <CartesianGrid vertical={false} />
               <XAxis dataKey="quarter" tickLine={false} axisLine={false} tickMargin={8} />
-              {/* 每 1,000 一格(user 指定),但 12 格文字塞進 ~200px 高會互相重疊,故只在偶數格(每 2,000)顯示文字標籤、
-                  奇數格只留格線 —— 常見 major/minor gridline 慣例,格線解析度仍是 1,000。 */}
-              <YAxis
-                tickLine={false}
-                axisLine={false}
-                width={52}
-                domain={[10000, 21000]}
-                ticks={[10000, 11000, 12000, 13000, 14000, 15000, 16000, 17000, 18000, 19000, 20000, 21000]}
-                interval={0}
-                tickFormatter={(v: number) => (v % 2000 === 0 ? v.toLocaleString() : '')}
-              />
-              <ChartTooltip content={<ChartTooltipContent formatter={hiringGapTooltipFormatter} />} />
-              <Bar dataKey="idlApproved" stackId="idl" fill="var(--color-idlApproved)" radius={2} />
-              <Bar dataKey="idlGap" stackId="idl" fill="var(--color-idlGap)" radius={2}>
-                <LabelList
-                  dataKey="idlGap"
-                  position="top"
-                  formatter={hiringGapLabelFormatter}
-                  className="text-caption"
-                  style={{ fill: 'var(--fg-secondary)' }}
-                />
-              </Bar>
-              <Bar dataKey="dlApproved" stackId="dl" fill="var(--color-dlApproved)" radius={2} />
-              <Bar dataKey="dlGap" stackId="dl" fill="var(--color-dlGap)" radius={2}>
-                <LabelList
-                  dataKey="dlGap"
-                  position="top"
-                  formatter={hiringGapLabelFormatter}
-                  className="text-caption"
-                  style={{ fill: 'var(--fg-secondary)' }}
-                />
-              </Bar>
-              {/* Recharts Legend 預設會依內部 stackId 字母排序(dl < idl)自動排 DL 在前,與 IDL 排最前面的要求相反 —
-                  改用自訂 content function,直接照 hiringGapConfig 順序(IDL 先)畫兩個色塊,不經 recharts 自動排序。 */}
+              <YAxis tickLine={false} axisLine={false} width={40} domain={[0, 'dataMax + 100']} />
+              <ChartTooltip content={<ChartTooltipContent indicator="line" />} />
+              {/* Recharts Legend 預設依 dataKey 字母排序(dlGap < idlGap)自動排 DL 在前,與 IDL 排最前面的要求相反 —
+                  改用自訂 content function,直接照 hiringGapConfig 順序(IDL 先)畫,不經 recharts 自動排序
+                  (同 Turnover rate legend 已用的手法)。 */}
               <ChartLegend
                 content={() => (
                   <div className="flex items-center justify-center gap-[var(--layout-space-loose)] pt-[var(--layout-space-tight)]">
-                    <div className="flex items-center gap-[var(--layout-space-tight)] text-fg-secondary text-caption">
-                      <Square size={8} fill={hiringGapConfig.idlApproved.color} stroke="none" />
-                      IDL
-                    </div>
-                    <div className="flex items-center gap-[var(--layout-space-tight)] text-fg-secondary text-caption">
-                      <Square size={8} fill={hiringGapConfig.dlApproved.color} stroke="none" />
-                      DL
-                    </div>
+                    {(['idlGap', 'dlGap'] as const).map((key) => (
+                      <div key={key} className="flex items-center gap-[var(--layout-space-tight)] text-fg-secondary text-caption">
+                        <Square size={8} fill={hiringGapConfig[key].color} stroke="none" />
+                        {hiringGapConfig[key].label}
+                      </div>
+                    ))}
                   </div>
                 )}
               />
-            </BarChart>
+              <Line dataKey="idlGap" type="monotone" stroke="var(--color-idlGap)" strokeWidth={2} dot={{ r: 3 }} />
+              <Line dataKey="dlGap" type="monotone" stroke="var(--color-dlGap)" strokeWidth={2} dot={{ r: 3 }} />
+            </LineChart>
           </ChartContainer>
         </ScoreCard>
 
