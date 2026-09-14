@@ -1,5 +1,8 @@
 // HR Pulse — Executive Overview + per-pillar detail pages
 //
+// code-quality-allow: file-size — 單一 route 的 app entry(無 router),Overview / PillarDetail /
+// Talent 三個頁面模板與其專屬 chart/metric helper 彼此高內聚(各自的 @story-baseline 引用緊鄰
+// 使用處),拆檔只會打散引用脈絡、不會降低耦合;當前 ~950 行,對齊 tabs.tsx 同款 file-size escape 先例。
 // @story-baseline: @qijenchen/design-system/components/Sidebar/sidebar.stories.tsx#IconCollapse
 // @story-baseline: @qijenchen/design-system/components/Select/select.stories.tsx#Modes
 // @story-baseline: @qijenchen/design-system/components/DescriptionList/description-list.stories.tsx
@@ -15,14 +18,19 @@
 //
 // 導覽:sidebar 項目(SidebarMenuButton id=)自動驅動 SidebarProvider.activeId → 各自 pillar 細節頁。
 
-import { useState } from 'react'
+import { memo, useState } from 'react'
+import { createPortal } from 'react-dom'
 import {
   Bar,
   BarChart,
   CartesianGrid,
+  Cell,
+  type DotItemDotProps,
   LabelList,
   Line,
   LineChart,
+  Pie,
+  PieChart,
   XAxis,
   YAxis,
 } from 'recharts'
@@ -31,10 +39,8 @@ import {
   SidebarProvider,
   Sidebar,
   SidebarContent,
-  SidebarFooter,
   SidebarGroup,
   SidebarGroupContent,
-  SidebarHeader,
   SidebarMenu,
   SidebarMenuItem,
   SidebarMenuButton,
@@ -42,14 +48,8 @@ import {
   ChromeHeader,
   TooltipProvider,
   Avatar,
-  ItemAvatar,
+  AccountMenu,
   Button,
-  DropdownMenu,
-  DropdownMenuTrigger,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuGroup,
   Select,
   Tag,
   Badge,
@@ -63,17 +63,30 @@ import {
   Tooltip,
   TooltipTrigger,
   TooltipContent,
+  Popover,
+  PopoverTrigger,
+  PopoverContent,
+  PopoverHeader,
+  PopoverTitle,
+  PopoverBody,
+  Tabs,
+  TabsList,
+  TabsTrigger,
+  TabsContent,
+  Accordion,
+  AccordionItem,
+  AccordionTrigger,
+  AccordionContent,
+  CircularProgress,
 } from '@qijenchen/design-system'
 import {
   LayoutDashboard,
   Users,
+  Users2,
   Award,
   Heart,
   MessageSquare,
   Globe,
-  User,
-  Settings,
-  LogOut,
   Bell,
   TrendingUp,
   TrendingDown,
@@ -89,6 +102,7 @@ import {
 const NAV = [
   { id: 'overview', label: 'Overview', icon: LayoutDashboard },
   { id: 'talent', label: 'Talent', icon: Users },
+  { id: 'talent-2', label: 'Talent Page 2', icon: Users2 },
   { id: 'leadership', label: 'Leadership', icon: Award },
   { id: 'culture', label: 'Culture', icon: Heart },
   { id: 'engagement', label: 'Engagement', icon: MessageSquare },
@@ -137,32 +151,60 @@ function KeyInfoDeltaTag({ delta }: { delta: Delta }) {
   )
 }
 
-// 卡片標題旁的「上次更新」提示 —— hover icon 才顯示時間,不佔用標題列空間。
+// 卡片標題旁的 (!) 提示 —— hover icon 才顯示內容,不佔用標題列空間。
 // @story-baseline: @qijenchen/design-system/components/Tooltip/tooltip.stories.tsx
-function CardTitleWithUpdated({ title, updatedAt }: { title: string; updatedAt: string }) {
+// size='h3'(預設)= Overview 圖表卡片標題級距(24/130,designer 指定);size='body' = 緊湊 Key card
+// 標題(text-body font-bold);size='card' = Overview KeyInfoCard 同一字級(text-body-lg font-medium)——
+// Talent/Leadership Leading data 標題用,比 Key(h3)小一級但比舊版 caption 大,呈現 key/leading 從屬關係。
+// description 優先於 updatedAt(Talent 頁 user 指定 (!) 顯示名詞解釋,取代 Overview 既有的更新時間)。
+function CardTitleWithUpdated({
+  title,
+  updatedAt,
+  description,
+  size = 'h3',
+}: {
+  title: string
+  updatedAt?: string
+  description?: string
+  size?: 'h3' | 'body' | 'card'
+}) {
+  const tooltipContent = description ?? (updatedAt ? `Latest update: ${updatedAt}` : undefined)
+  const titleClass =
+    size === 'h3' ? 'text-h3 font-medium' : size === 'card' ? 'text-body-lg font-medium text-foreground' : 'text-body font-bold'
   return (
-    <div className="flex items-center gap-1">
-      {/* 24/130(text-h3 token)—— 對齊 designer 指定字級/行高級距;字重 medium(對齊 designer 要求) */}
-      <span className="text-h3 font-medium">{title}</span>
-      <Tooltip>
-        <TooltipTrigger asChild>
-          <span className="inline-flex items-center text-fg-muted cursor-default" aria-label={`Latest update ${updatedAt}`}>
-            <Info size={14} />
-          </span>
-        </TooltipTrigger>
-        <TooltipContent>Latest update: {updatedAt}</TooltipContent>
-      </Tooltip>
+    <div className="flex items-center gap-[var(--layout-space-tight)]">
+      <span className={titleClass}>{title}</span>
+      {tooltipContent && (
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <span className="inline-flex items-center text-fg-muted cursor-default flex-none" aria-label={tooltipContent}>
+              <Info size={14} />
+            </span>
+          </TooltipTrigger>
+          <TooltipContent>{tooltipContent}</TooltipContent>
+        </Tooltip>
+      )}
     </div>
   )
 }
 
 // ── Overview: Turnover rate(折線,三系列)+ Hiring gap(長條)── 皆為 2026 假數字,待接真實資料源。
-// 2026-08-28 user 指定三系列改名;Q4(最新季)= user 給定數值 3.4/2.7/2.3,Q1-Q3 為對齊該量級的假波動(假數字)。
+// 2026-09-08 user 指定改成 monthly(原為 quarterly)。
+// 2026-09-14 user 再指定改成「累進制」:Jan 起逐月累加,三系列皆單調遞增,全年不超過 3(user 給定上限)。
+const MONTH_ABBR = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
 const TURNOVER_TREND = [
-  { quarter: '2026 Q1', turnover: 3.7, newcomer: 2.4, voluntary: 2.6 },
-  { quarter: '2026 Q2', turnover: 3.1, newcomer: 3.0, voluntary: 2.1 },
-  { quarter: '2026 Q3', turnover: 3.6, newcomer: 2.5, voluntary: 2.5 },
-  { quarter: '2026 Q4', turnover: 3.4, newcomer: 2.7, voluntary: 2.3 },
+  { month: '2026/01', turnover: 0.3, newcomer: 0.2, voluntary: 0.1 },
+  { month: '2026/02', turnover: 0.6, newcomer: 0.4, voluntary: 0.3 },
+  { month: '2026/03', turnover: 0.9, newcomer: 0.6, voluntary: 0.5 },
+  { month: '2026/04', turnover: 1.2, newcomer: 0.8, voluntary: 0.7 },
+  { month: '2026/05', turnover: 1.5, newcomer: 1.0, voluntary: 0.9 },
+  { month: '2026/06', turnover: 1.8, newcomer: 1.2, voluntary: 1.1 },
+  { month: '2026/07', turnover: 2.0, newcomer: 1.4, voluntary: 1.3 },
+  { month: '2026/08', turnover: 2.2, newcomer: 1.6, voluntary: 1.5 },
+  { month: '2026/09', turnover: 2.4, newcomer: 1.8, voluntary: 1.7 },
+  { month: '2026/10', turnover: 2.6, newcomer: 2.0, voluntary: 1.9 },
+  { month: '2026/11', turnover: 2.8, newcomer: 2.2, voluntary: 2.1 },
+  { month: '2026/12', turnover: 3.0, newcomer: 2.4, voluntary: 2.3 },
 ]
 const turnoverConfig = {
   turnover: { label: 'Turnover', color: 'var(--chart-1)' },
@@ -170,55 +212,123 @@ const turnoverConfig = {
   voluntary: { label: 'Voluntary turnover', color: 'var(--chart-3)' },
 } satisfies ChartConfig
 
-// 2026-08-28 user 指定改版:同 Quarter 兩條(DL 紫色/IDL 藍色),各自 Approved(深)+ Gap(淺)疊加至 Budget、
-// 長條上方標「+Gap」註記。僅給 DL 範例(Budget 20,560/Approved 20,000/Gap 560)當 Q1 DL,其餘為對齊範例量級的假數字。
+// 2026-09-14 user 指定改成折線圖:兩條線分別是 IDL / DL 的 Gap 絕對數字。
+// 2026-09-14 user 再指定:Gap 改成 960 上下(DL Q1 給定 Budget 20,560 / Actual 17,500 /
+// Forecast 2,100 / Gap w/ TO 960,其餘 quarter × IDL/DL 皆為對齊 960 量級的假數字,
+// 每列都滿足 Budget − Actual − Forecast = Gap,供 hover 明細對得上折線數值)。
 type HiringGapRow = {
   quarter: string
-  dlBudget: number; dlApproved: number; dlGap: number
-  idlBudget: number; idlApproved: number; idlGap: number
+  idlBudget: number; idlActual: number; idlForecast: number; idlGap: number
+  dlBudget: number; dlActual: number; dlForecast: number; dlGap: number
 }
-// 2026-08-28 user 指定 DL/IDL 假數字量級改接近,方便共用同一條 10,000 起始 Y 軸都看得清楚。
 const HIRING_GAP_TREND: HiringGapRow[] = [
-  { quarter: '2026 Q1', dlBudget: 20560, dlApproved: 20000, dlGap: 560, idlBudget: 19200, idlApproved: 18900, idlGap: 300 },
-  { quarter: '2026 Q2', dlBudget: 19800, dlApproved: 19500, dlGap: 300, idlBudget: 18600, idlApproved: 18400, idlGap: 200 },
-  { quarter: '2026 Q3', dlBudget: 18900, dlApproved: 18750, dlGap: 150, idlBudget: 17800, idlApproved: 17600, idlGap: 200 },
-  { quarter: '2026 Q4', dlBudget: 19200, dlApproved: 18800, dlGap: 400, idlBudget: 18000, idlApproved: 17700, idlGap: 300 },
+  { quarter: '2026 Q1', idlBudget: 19200, idlActual: 16400, idlForecast: 1850, idlGap: 950, dlBudget: 20560, dlActual: 17500, dlForecast: 2100, dlGap: 960 },
+  { quarter: '2026 Q2', idlBudget: 18900, idlActual: 16150, idlForecast: 1805, idlGap: 945, dlBudget: 20200, dlActual: 17300, dlForecast: 2000, dlGap: 900 },
+  { quarter: '2026 Q3', idlBudget: 18700, idlActual: 15950, idlForecast: 1785, idlGap: 965, dlBudget: 19800, dlActual: 16950, dlForecast: 1900, dlGap: 950 },
+  { quarter: '2026 Q4', idlBudget: 19000, idlActual: 16200, idlForecast: 1845, idlGap: 955, dlBudget: 20100, dlActual: 17200, dlForecast: 1960, dlGap: 940 },
 ]
-// 2026-08-28 user 指定改回原本紫/藍配色;IDL 排最前面(順序帶動長條左右排列 + legend 順序)。
+// IDL 藍色 / DL 紫色(user 既有配色決策延續);折線是唯一系列,改用主色階(6)而非先前 bar 版本
+// 疊加用的淺色階(3),確保線條在白底上對比足夠。IDL 排最前面(順序帶動 legend 順序)。
 const hiringGapConfig = {
-  idlApproved: { label: 'IDL Approved', color: 'var(--color-blue-6)' },
-  idlGap: { label: 'IDL Gap', color: 'var(--color-blue-3)' },
-  dlApproved: { label: 'DL Approved', color: 'var(--color-purple-6)' },
-  dlGap: { label: 'DL Gap', color: 'var(--color-purple-3)' },
+  idlGap: { label: 'IDL Gap', color: 'var(--color-blue-6)' },
+  dlGap: { label: 'DL Gap', color: 'var(--color-purple-6)' },
 } satisfies ChartConfig
 
-// 2026-08-28 user 指定 hover 只顯示 DL/IDL 的 Gap 數值和 %(Budget/Approved 不再顯示,保持最精簡)。
-function hiringGapTooltipFormatter(value: unknown, _name: unknown, item: { dataKey?: string | number }, _index: number, payload: unknown) {
-  const key = String(item.dataKey) as keyof typeof hiringGapConfig
-  if (key.endsWith('Approved')) return null
+// 2026-09-14 user 指定 IDL/DL 節點的 hover 要「分開」,各自獨立顯示自己的明細,不要黏在一起。
+// recharts v3 的 LineChart 硬寫死 allowedTooltipTypes=['axis'](見 recharts LineChart.js),
+// Tooltip 的 shared={false} 對 LineChart 完全不生效(驗證失敗 silently fallback 回 axis 共用模式)——
+// 這是 recharts 架構限制,不是本檔設定問題。
+//
+// 實測排查(依序排除):
+// (1) 改每節點包一個 DS `<Tooltip>`(Radix)—— Radix 自己的 hover 偵測(onPointerMove +
+//     hasPointerMoveOpenedRef)量到 data-state 恆為 closed。
+// (2) 改成父層 state 直接控制 `open`,節點只回報 onMouseEnter/onMouseLeave —— 仍量到
+//     enter 後緊接著一個 leave(native listener 直接掛在該 DOM node 上也一樣),可見圓點 r=4
+//     命中範圍過小不是主因(疊 r=10 透明圓當命中區後現象不變)。
+// (3) 根因:hover 觸發的 state 更新讓 OverviewPage 重新渲染,連帶讓整棵 <LineChart> 子樹
+//     被 React 重新呼叫 render——recharts 對此的反應是把該節點的 DOM 換掉(移除舊節點時瀏覽器
+//     會對它補發一個 mouseleave),不是滑鼠真的離開。
+// 最終作法:hover 資料完全不進 recharts 子樹的 render 路徑——GapDot 只在原生 mouse 事件裡把
+// {payload, 螢幕座標} 回報給父層,浮層改成獨立的 GapHoverCard 用 createPortal 掛到
+// document.body(順便繞開 ScoreCard 的 overflow-hidden 裁切),完全在 chart 外部渲染;
+// 再用 React.memo 包住整張 Hiring Gap 卡片、餵它恆定不變的 onHover(useState setter 本身
+// reference 穩定),讓 hover 狀態變化「不會」讓 <LineChart> 重新 render,從源頭消除上述換 DOM。
+type GapHoverInfo = { seriesKey: 'idlGap' | 'dlGap'; payload: HiringGapRow; x: number; y: number }
 
-  const row = payload as HiringGapRow
-  const budget = key.startsWith('dl') ? row.dlBudget : row.idlBudget
-  const gapValue = Number(value)
-  const pct = ((gapValue / budget) * 100).toFixed(1)
-  // user 指定 hover 詳情也比照 Turnover rate legend,前面加色塊區分 IDL / DL(同一組 Square icon 手法)。
+function GapDot({
+  cx,
+  cy,
+  payload,
+  seriesKey,
+  onHover,
+}: {
+  cx?: number
+  cy?: number
+  payload?: HiringGapRow
+  seriesKey: 'idlGap' | 'dlGap'
+  onHover: (info: GapHoverInfo | null) => void
+}) {
+  if (cx == null || cy == null || !payload) return null
   return (
-    <div className="flex w-full flex-1 items-center justify-between gap-[var(--layout-space-tight)]">
-      <span className="flex items-center gap-[var(--layout-space-tight)] text-fg-secondary">
-        <Square size={8} fill={hiringGapConfig[key].color} stroke="none" />
-        {hiringGapConfig[key].label}
-      </span>
-      <span className="text-foreground font-mono font-medium tabular-nums">
-        {gapValue > 0 ? `+${gapValue.toLocaleString()}` : gapValue.toLocaleString()} ({pct}%)
-      </span>
-    </div>
+    <g
+      className="cursor-pointer"
+      onMouseEnter={(e) => onHover({ seriesKey, payload, x: e.clientX, y: e.clientY })}
+      onMouseMove={(e) => onHover({ seriesKey, payload, x: e.clientX, y: e.clientY })}
+      onMouseLeave={() => onHover(null)}
+    >
+      <circle cx={cx} cy={cy} r={6} fill="transparent" stroke="none" pointerEvents="all" />
+      <circle cx={cx} cy={cy} r={4} fill={hiringGapConfig[seriesKey].color} stroke="none" pointerEvents="none" />
+    </g>
   )
 }
 
-// +Gap 長條上方註記 —— DS 無「root--small」token;text-caption 是 spec 文件標明的「圖表附註」用途 token,取代之。
+// GapDot 回報的 hover 明細——渲染在 recharts 子樹之外(見上方註解),用固定定位貼著游標,
+// 視覺對齊 DS TooltipContent 樣式(bg-tooltip / text-on-emphasis / shadow-elevation-200)。
+// @story-baseline: @qijenchen/design-system/components/Tooltip/tooltip.stories.tsx#Default
+function GapHoverCard({ info }: { info: GapHoverInfo | null }) {
+  if (!info) return null
+  const { seriesKey, payload, x, y } = info
+  const budget = seriesKey === 'idlGap' ? payload.idlBudget : payload.dlBudget
+  const actual = seriesKey === 'idlGap' ? payload.idlActual : payload.dlActual
+  const forecast = seriesKey === 'idlGap' ? payload.idlForecast : payload.dlForecast
+  const gap = seriesKey === 'idlGap' ? payload.idlGap : payload.dlGap
+  return createPortal(
+    <div
+      className="pointer-events-none fixed z-50 max-w-[17.5rem] break-words rounded-md bg-tooltip p-[var(--layout-space-tight)] text-body font-normal text-on-emphasis"
+      style={{ left: x + 14, top: y + 14, boxShadow: 'var(--elevation-200)' }}
+    >
+      <div data-theme="dark" className="flex w-full flex-col gap-[var(--layout-space-tight)]">
+        <span className="flex items-center gap-[var(--layout-space-tight)] font-medium">
+          <Square size={8} fill={hiringGapConfig[seriesKey].color} stroke="none" />
+          {payload.quarter} · {hiringGapConfig[seriesKey].label}
+        </span>
+        <div className="flex flex-col gap-[var(--layout-space-tight)] text-caption">
+          <div className="flex items-center justify-between gap-[var(--layout-space-loose)]">
+            <span className="text-fg-muted">Budget</span>
+            <span className="font-mono tabular-nums">{budget.toLocaleString()}</span>
+          </div>
+          <div className="flex items-center justify-between gap-[var(--layout-space-loose)]">
+            <span className="text-fg-muted">Actual</span>
+            <span className="font-mono tabular-nums">{actual.toLocaleString()}</span>
+          </div>
+          <div className="flex items-center justify-between gap-[var(--layout-space-loose)]">
+            <span className="text-fg-muted">Forecast</span>
+            <span className="font-mono tabular-nums">{forecast.toLocaleString()}</span>
+          </div>
+          <div className="flex items-center justify-between gap-[var(--layout-space-loose)]">
+            <span className="text-fg-muted">Gap w/ TO</span>
+            <span className="font-mono font-medium tabular-nums">{gap.toLocaleString()}</span>
+          </div>
+        </div>
+      </div>
+    </div>,
+    document.body,
+  )
+}
+
+// 節點上方常駐標籤(user 指定「直接寫在節點上面」,非只有 hover 才看得到)。
 function hiringGapLabelFormatter(label: unknown) {
-  const value = Number(label)
-  return value > 0 ? `+${value.toLocaleString()}` : value.toLocaleString()
+  return Number(label).toLocaleString()
 }
 
 // 統一時間格式:`<來源>, YYYY/MM/DD`(對齊 DS DatePicker 預設格式 —— date-picker.tsx:37
@@ -243,15 +353,16 @@ const KEY_INFO_CARDS: { id: string; title: string; value: string; delta: Delta; 
 
 function KeyInfoCard({ card }: { card: (typeof KEY_INFO_CARDS)[number] }) {
   return (
-    <ScoreCard className="flex flex-col">
+    <ScoreCard className="grid grid-rows-subgrid row-span-3">
       {/* Large/500,16/150(text-body-lg font-medium token)+ 加深至 text-foreground(對齊 designer 要求「黑一點」)。
-          固定保留 2 行高度(不論標題實際幾行),避免長標題(如 Local Manager Representation)換行撐開、
-          導致下方數字跟別張卡片高度對不齊 —— 對齊 designer 要求「數字高度對齊,不要上上下下的」。 */}
+          2026-09-14 改用 grid-rows-subgrid(見 Row 2 <section> 的 grid-rows-[auto_auto_auto])取代原本
+          「固定保留 2 行標題高度」的猜測式作法 —— 猜 2 行在標題換到 3 行以上時仍會對不齊(已實測
+          Local Manager Representation 在較窄寬度換 3 行時數字掉下去);subgrid 讓每一列高度跨卡「取
+          最高者」,不論標題實際幾行都精確對齊,不用再猜行數上限。 */}
       {/* @story-baseline: @qijenchen/design-system/components/Tooltip/tooltip.stories.tsx#Default —
           2026-08-31 user 指定:Last updated 日期改回 hover (!) 顯示,不再常駐於卡片上;
           原本 hover 顯示 description 的行為拿掉(移除)。 */}
-      {/* @layout-space-magic-ok: min-h-[3rem] 是固定 2 行標題高度預留(非 spacing/gap),延續本檔既有 designer 對齊需求 */}
-      <div className="flex items-start gap-1 min-h-[3rem]">
+      <div className="flex items-start gap-[var(--layout-space-tight)]">
         <span className="text-body-lg font-medium text-foreground">{card.title}</span>
         <Tooltip>
           <TooltipTrigger asChild>
@@ -279,7 +390,9 @@ function KeyInfoCard({ card }: { card: (typeof KEY_INFO_CARDS)[number] }) {
   )
 }
 
-type PillarId = 'talent' | 'leadership' | 'culture' | 'engagement' | 'globalization'
+// 'talent' / 'leadership' 不在此 union 內 —— 兩者改用專屬頁面(TalentPage / LeadershipPage,
+// 皆為 tab + key/leading metric drill-down),不再套用其餘 pillar 共用的 PillarDetailPage template。
+type PillarId = 'culture' | 'engagement' | 'globalization'
 
 type PillarDetail = {
   id: PillarId
@@ -294,28 +407,6 @@ type PillarDetail = {
 
 // 各 pillar 細節頁資料(沿用可對應的既有內容,Leadership / Culture / Globalization 為新增 — 待實際資料源接上)。
 const PILLAR_DETAILS: Record<PillarId, PillarDetail> = {
-  talent: {
-    id: 'talent', label: 'Talent', icon: Users, score: 82, delta: { direction: 'up', text: '+5' },
-    metrics: [
-      { label: 'Time to Fill', value: '32 days' },
-      { label: 'Cost per Hire', value: '$4,850' },
-      { label: 'Offer Acceptance Rate', value: '87%' },
-      { label: 'Open Requisitions', value: '24' },
-    ],
-    trend: [{ period: "Q3'24", value: 74 }, { period: "Q4'24", value: 78 }, { period: "Q1'25", value: 80 }, { period: "Q2'25", value: 82 }],
-    note: 'Offer acceptance rate improved to 87% this quarter, above the 80% target. Continue monitoring time-to-fill in Engineering.',
-  },
-  leadership: {
-    id: 'leadership', label: 'Leadership', icon: Award, score: 75, delta: { direction: 'up', text: '+2' },
-    metrics: [
-      { label: 'Succession Coverage', value: '68%' },
-      { label: 'High-Potential Retention', value: '91%' },
-      { label: 'Leadership Bench Strength', value: 'Medium' },
-      { label: 'Avg. Span of Control', value: '6.2' },
-    ],
-    trend: [{ period: "Q3'24", value: 70 }, { period: "Q4'24", value: 72 }, { period: "Q1'25", value: 73 }, { period: "Q2'25", value: 75 }],
-    note: 'Succession coverage for critical roles remains below the 75% target — 12 roles still lack a ready-now successor.',
-  },
   culture: {
     id: 'culture', label: 'Culture', icon: Heart, score: 79, delta: { direction: 'up', text: '+1' },
     metrics: [
@@ -351,15 +442,579 @@ const PILLAR_DETAILS: Record<PillarId, PillarDetail> = {
   },
 }
 
+// ── Talent page:Leadership Development / Talent Productivity 兩個 tab ──────────
+// 每個 tab 由若干 Key metric 組成,部分 Key 帶 Leading metric(附屬於該 Key,縮排展示在同一卡片內)。
+// user 指定:點選任一 Key 或 Leading data,其下方展示該指標 2026 Q1~Q4 折線變化(皆為假數字,
+// 待接真實資料源;Q4 = user 給定當前值,Q1-Q3 為對齊量級的假波動,沿用本檔 TURNOVER_TREND 同一慣例)。
+type QuarterPoint = { period: string; value: number }
+
+function quarterlySeries(q1: number, q2: number, q3: number, q4: number): QuarterPoint[] {
+  return [
+    { period: '2026 Q1', value: q1 },
+    { period: '2026 Q2', value: q2 },
+    { period: '2026 Q3', value: q3 },
+    { period: '2026 Q4', value: q4 },
+  ]
+}
+
+type MetricUnit = 'percent' | 'days' | 'currency'
+
+type MetricDatum = {
+  id: string
+  label: string
+  value: number
+  displayValue: string
+  unit: MetricUnit
+  trend: QuarterPoint[]
+  /** 選填:vs 上期的漲跌(KeyInfoDeltaTag)+ 比較基準文案。無則不顯示漲跌列(Talent 頁既有卡片無此需求)。 */
+  delta?: Delta
+  deltaSuffix?: string
+  /** 選填:(!) hover 顯示的最後更新時間(CardTitleWithUpdated)。無則標題不帶 (!) icon。 */
+  updatedAt?: string
+  /** 選填:(!) hover 顯示的名詞解釋(CardTitleWithUpdated,優先於 updatedAt)。Talent 頁 user 指定要顯示
+   * 這個,取代 updatedAt(皆為假文案,待接真實 methodology note)。 */
+  description?: string
+}
+
+type KeyMetricDatum = MetricDatum & { leading?: MetricDatum[] }
+
+// user 給定:Headcount Fulfilment Gap 58%(圓餅圖,滿分 100%),帶 3 個 Leading data。
+// delta/updatedAt:Talent page2(KeyWithLeadingSwitcher)consume,與既有 trend(56→58)一致算出 +2;
+// description:Talent page1(KeyMetricCard)(!) hover 用,取代 updatedAt(皆為假文案)。
+const HEADCOUNT_FULFILMENT_GAP: KeyMetricDatum = {
+  id: 'headcount-fulfilment-gap',
+  label: 'Headcount Fulfilment Gap',
+  value: 58,
+  displayValue: '58%',
+  unit: 'percent',
+  trend: quarterlySeries(51, 54, 56, 58),
+  delta: { direction: 'up', text: '+2%' },
+  deltaSuffix: 'vs 2026 Q3',
+  updatedAt: '2026/08/26 06:00',
+  description: '% of approved headcount successfully filled against the current quarter plan.',
+  // 2026-09-14 user 指定:delta 的單位要對應該筆數字自己的 unit(percent → %,days → days),
+  // 不能全部都是裸數字(之前 +1/-2/-5 沒帶單位,跟 Overview KeyInfoCard 的 +2%/-5% 慣例不一致)。
+  leading: [
+    {
+      id: 'mobility-willingness-rate', label: 'Mobility willingness rate', value: 35, displayValue: '35%', unit: 'percent',
+      trend: quarterlySeries(30, 32, 34, 35), delta: { direction: 'up', text: '+1%' }, deltaSuffix: 'vs 2026 Q3',
+      description: '% of employees indicating willingness to relocate or take an internal transfer (latest engagement survey).',
+    },
+    {
+      id: 'assignee-experience', label: 'Assignee experience', value: 27, displayValue: '27%', unit: 'percent',
+      trend: quarterlySeries(24, 25, 26, 27), delta: { direction: 'up', text: '+1%' }, deltaSuffix: 'vs 2026 Q3',
+      description: '% of internationally assigned employees rating their assignment experience positively (annual mobility survey).',
+    },
+    // 2026-09-09 user 指定改成 21 days;指定「速度變快」= 改善,方向改用 up(綠色 + 上升箭頭),
+    // 即使天數本身是下降(-5)——箭頭/顏色語意 = 「變好」而非「數字變大」(user verbatim 決策)。
+    {
+      id: 'time-to-fill-fulfilment-gap', label: 'Time to fill', value: 21, displayValue: '21 days', unit: 'days',
+      trend: quarterlySeries(32, 29, 26, 21), delta: { direction: 'up', text: '-5 days' }, deltaSuffix: 'vs 2026 Q3',
+      description: 'Average calendar days from requisition approval to offer acceptance.',
+    },
+  ],
+}
+
+// user 給定:Critical Roles Vacancy Ratio 14%,帶 2 個 Leading data。delta 與既有 trend(15→14)一致算出 -1。
+const CRITICAL_ROLES_VACANCY_RATIO: KeyMetricDatum = {
+  id: 'critical-roles-vacancy-ratio',
+  label: 'Critical Roles Vacancy Ratio',
+  value: 14,
+  displayValue: '14%',
+  unit: 'percent',
+  trend: quarterlySeries(18, 17, 15, 14),
+  delta: { direction: 'down', text: '-1%' },
+  deltaSuffix: 'vs 2026 Q3',
+  updatedAt: '2026/08/26 06:00',
+  description: '% of designated critical roles currently unfilled, relative to total critical-role headcount.',
+  leading: [
+    {
+      id: 'time-to-fill-vacancy-ratio', label: 'Time to fill', value: 68, displayValue: '68 days', unit: 'days',
+      trend: quarterlySeries(74, 72, 70, 68), delta: { direction: 'up', text: '-2 days' }, deltaSuffix: 'vs 2026 Q3',
+      description: 'Average calendar days to fill a critical role, from requisition open to offer acceptance.',
+    },
+    {
+      id: 'internal-fill-managers', label: 'Internal fill (managers)', value: 95, displayValue: '95 days', unit: 'days',
+      trend: quarterlySeries(102, 100, 97, 95), delta: { direction: 'up', text: '-2 days' }, deltaSuffix: 'vs 2026 Q3',
+      description: 'Average calendar days to fill a vacant manager role with an internal candidate.',
+    },
+  ],
+}
+
+const LEADERSHIP_DEVELOPMENT_KEYS: KeyMetricDatum[] = [HEADCOUNT_FULFILMENT_GAP, CRITICAL_ROLES_VACANCY_RATIO]
+
+// user 指定「先幫我放假數字」—— 4 張皆為假數字,待接真實資料源;無 Leading data(user 未提供)。
+const TALENT_PRODUCTIVITY_KEYS: KeyMetricDatum[] = [
+  {
+    id: 'new-hire-performance', label: 'New Hire Performance', value: 42, displayValue: '42%', unit: 'percent',
+    trend: quarterlySeries(36, 38, 40, 42), delta: { direction: 'up', text: '+2%' }, deltaSuffix: 'vs 2026 Q3',
+    description: '% of new hires rated S+ or above (top ~35%) in their first performance review.',
+  },
+  {
+    id: 'quality-of-hire', label: 'Quality of Hire — Hiring Manager Satisfaction', value: 88, displayValue: '88%', unit: 'percent',
+    trend: quarterlySeries(84, 85, 87, 88), delta: { direction: 'up', text: '+1%' }, deltaSuffix: 'vs 2026 Q3',
+    description: '% of hiring managers rating new hire quality as satisfactory or above (post-90-day survey).',
+  },
+  {
+    id: 'revenue-per-employee', label: 'Revenue per Employee', value: 215000, displayValue: '$215K', unit: 'currency',
+    trend: quarterlySeries(198000, 205000, 210000, 215000), delta: { direction: 'up', text: '+$5K' }, deltaSuffix: 'vs 2026 Q3',
+    description: 'Trailing 12-month company revenue divided by average headcount.',
+  },
+  {
+    id: 'profit-per-employee', label: 'Profit per Employee', value: 48000, displayValue: '$48K', unit: 'currency',
+    trend: quarterlySeries(41000, 43000, 46000, 48000), delta: { direction: 'up', text: '+$2K' }, deltaSuffix: 'vs 2026 Q3',
+    description: 'Trailing 12-month operating profit divided by average headcount.',
+  },
+]
+
+// Key metric 的達成率指示(滿分 100%)—— 直接消費 DS CircularProgress(determinate ring:
+// 可見 track `var(--secondary)` + 進度 arc),而非手刻 Pie/Cell donut(踩過 --divider track
+// 幾乎透明看不見的坑)。
+// 2026-09-14 user 指定數值要寫「到圈圈裡面」:CircularProgress 本身不支援置中 affix(DS 決策,
+// 見 circular-progress.tsx docblock「不設 status prop」段同一 anti-over-designing 立場)——
+// consumer 端用標準 relative/absolute overlay 疊加置中文字(同一手法已用於 Button overlayBadge),
+// 疊在 ring 上面而非修改/重造 ring 本身,仍是消費 DS 元件的視覺輸出,非繞過。
+// @story-baseline: @qijenchen/design-system/components/CircularProgress/circular-progress.stories.tsx
+// displayValue 由 caller 傳完整格式化字串(非固定補 %)—— Leadership 頁 Key(如「92」無 % 符號)
+// 與 Talent 頁 Key(如「58%」)共用同一元件,格式差異交給資料層 displayValue,不在此元件寫死。
+// 2026-09-14 user 指定:圈圈內數字字級要跟 Talent page2 的 KeyPieChart 一樣大(text-body-lg,非 text-caption)。
+// 2026-09-14 user 再指定:「第一個 key」(Talent 頁 Leadership Development tab)的圓餅圖再大一點,
+// 圈內數字要跟下面 Leading 數字(text-h3)一樣大 —— 新增 size="lg"(80px + text-h3),只在該 tab 的
+// Key 呼叫端傳入;'md'(Leadership 頁 StatKeyCard 預設)/'sm'(Talent Productivity tab)維持原尺寸,
+// 不受影響。
+function KeyProgressRing({ value, displayValue, size = 'md' }: { value: number; displayValue: string; size?: 'md' | 'sm' | 'lg' }) {
+  const dim = size === 'lg' ? 80 : size === 'md' ? 64 : 48
+  const dimClass = size === 'lg' ? 'w-20 h-20' : size === 'md' ? 'w-16 h-16' : 'w-12 h-12'
+  const textClass = size === 'lg' ? 'text-h3' : 'text-body-lg'
+  return (
+    <div className={`relative flex-none ${dimClass}`}>
+      <CircularProgress value={value} size={dim} />
+      <span className={`pointer-events-none absolute inset-0 flex items-center justify-center ${textClass} font-bold tabular-nums`}>
+        {displayValue}
+      </span>
+    </div>
+  )
+}
+
+const trendConfig = { value: { label: 'Value', color: 'var(--chart-1)' } } satisfies ChartConfig
+
+// 點選 Key / Leading data 展示的 2026 Q1~Q4 折線圖 —— 沿用本檔既有 LineChart 手法(單一系列版)。
+// @story-baseline: @qijenchen/design-system/components/Chart/chart.stories.tsx#LineChartResponseTime
+function MetricTrendChart({ data }: { data: QuarterPoint[] }) {
+  return (
+    <ChartContainer config={trendConfig} className="h-[100px] w-full mt-[var(--layout-space-tight)]">
+      <LineChart accessibilityLayer data={data} margin={{ top: 8, right: 8, left: 8, bottom: 0 }}>
+        <CartesianGrid vertical={false} />
+        <XAxis dataKey="period" tickLine={false} axisLine={false} tickMargin={6} padding={{ left: 24, right: 24 }} />
+        <YAxis hide domain={['dataMin - 2', 'dataMax + 2']} />
+        <ChartTooltip content={<ChartTooltipContent indicator="line" />} />
+        <Line dataKey="value" type="monotone" stroke="var(--color-value)" strokeWidth={2} dot={{ r: 3 }} />
+      </LineChart>
+    </ChartContainer>
+  )
+}
+
+// 2026-09-09 user 三點指定重排本卡:
+//   1.「2026 Q1-Q4 Trend」標題跟著圖表走,移進收合面板(AccordionContent)內,不再常駐 trigger 列。
+//   2. Key / Leading 都比照 Overview KeyInfoCard 呈現:標題+(!) → 大數字 → delta tag(+X%/-X% vs 2026 Q3),
+//      (!) hover 顯示名詞解釋(CardTitleWithUpdated description,取代 updatedAt)。
+//   3. Leading 標題字級提升到跟 Overview「New Hire Performance」同級(CardTitleWithUpdated size="card")。
+//   4. Key 標題同步加大(size="h3",比 Leading 的 "card" 大一級),讓 Key/Leading 從屬關係看得出來;
+//      Leading 數字也放大到 text-h2(user 追加指定:「這些是 user 要看的重點」),不再是縮排小字。
+// 展開/收合皆用 DS Accordion(非手刻 chevron 按鈕)—— Key 自己是獨立單一 item 的 Accordion
+// (type="single" collapsible),Leading 群組是另一個 type="multiple" 的 Accordion(各自獨立展開,互不影響)。
+// @story-baseline: @qijenchen/design-system/components/Accordion/accordion.stories.tsx#Default
+// 2026-09-14 user 再指定:數值改寫進 ring 裡面(見 KeyProgressRing)後,ring 旁邊空出的寬度不能空著——
+// 把 delta tag 從「疊在數值下面」改成「排在數值/ring 右側」(trigger 內容用 justify-between 撐滿整列寬),
+// Leading 列同步比照(數字左、delta 右),讓整張卡片橫向填滿,不再右側大片留白。
+function KeyMetricCard({ metric, donutSize = 'md' }: { metric: KeyMetricDatum; donutSize?: 'md' | 'sm' | 'lg' }) {
+  return (
+    <ScoreCard className="flex-1 min-w-0 flex flex-col">
+      <CardTitleWithUpdated title={metric.label} description={metric.description} size="h3" />
+      <Accordion type="single" collapsible className="mt-[var(--layout-space-loose)]">
+        <AccordionItem value={metric.id} className="border-b-0">
+          <AccordionTrigger className="py-[var(--layout-space-tight)]">
+            {/* 2026-09-14 user 指定:delta tag 靠左一點、貼近圓餅圖(移除 justify-between,
+                改用固定 gap,delta 緊跟在 ring 後面而非撐到整排最右邊)。 */}
+            <div className="flex flex-1 items-center gap-[var(--layout-space-loose)]">
+              {metric.unit === 'percent' ? (
+                <KeyProgressRing value={metric.value} displayValue={metric.displayValue} size={donutSize} />
+              ) : (
+                <span className="text-h2 font-bold tabular-nums">{metric.displayValue}</span>
+              )}
+              {metric.delta && (
+                <div className="flex items-center gap-[var(--layout-space-tight)]">
+                  <KeyInfoDeltaTag delta={metric.delta} />
+                  {metric.deltaSuffix && <span className="text-caption text-fg-muted">{metric.deltaSuffix}</span>}
+                </div>
+              )}
+            </div>
+          </AccordionTrigger>
+          <AccordionContent>
+            <div className="text-caption font-medium text-fg-muted">2026 Q1–Q4 Trend</div>
+            <MetricTrendChart data={metric.trend} />
+          </AccordionContent>
+        </AccordionItem>
+      </Accordion>
+
+      {metric.leading && metric.leading.length > 0 && (
+        <div className="mt-[var(--layout-space-loose)] border-t border-divider pt-[var(--layout-space-tight)]">
+          <div className="text-caption font-medium text-fg-muted">Leading indicators</div>
+          <Accordion type="multiple" className="mt-[var(--layout-space-tight)]">
+            {metric.leading.map((m) => (
+              <AccordionItem key={m.id} value={m.id}>
+                <AccordionTrigger className="items-start py-[var(--layout-space-tight)]">
+                  <div className="flex flex-1 flex-col">
+                    <CardTitleWithUpdated title={m.label} description={m.description} size="card" />
+                    {/* 2026-09-14 user 指定:數字縮小(比重不再蓋過 Key),delta tag 跟 vs 2026Q3 並排
+                        (同一行,非疊兩行),緊貼數字右側(gap-tight 留一點間距)。 */}
+                    <div className="mt-[var(--layout-space-loose)] flex items-center gap-[var(--layout-space-tight)]">
+                      <span className="text-h3 font-bold tabular-nums">{m.displayValue}</span>
+                      {m.delta && (
+                        <div className="flex items-center gap-[var(--layout-space-tight)]">
+                          <KeyInfoDeltaTag delta={m.delta} />
+                          {m.deltaSuffix && <span className="text-caption text-fg-muted">{m.deltaSuffix}</span>}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </AccordionTrigger>
+                <AccordionContent>
+                  <div className="text-caption font-medium text-fg-muted">2026 Q1–Q4 Trend</div>
+                  <MetricTrendChart data={m.trend} />
+                </AccordionContent>
+              </AccordionItem>
+            ))}
+          </Accordion>
+        </div>
+      )}
+    </ScoreCard>
+  )
+}
+
+// @story-baseline: @qijenchen/design-system/components/Tabs/tabs.stories.tsx#Default
+function TalentPage() {
+  return (
+    <div className="px-[var(--layout-space-tight)] py-[var(--layout-space-tight)]">
+      <Tabs defaultValue="leadership-development">
+        <TabsList>
+          <TabsTrigger value="leadership-development">Leadership Development</TabsTrigger>
+          <TabsTrigger value="talent-productivity">Talent Productivity</TabsTrigger>
+        </TabsList>
+        <TabsContent value="leadership-development" className="mt-[var(--layout-space-loose)]">
+          <section className="flex gap-[var(--layout-space-loose)] items-start">
+            {LEADERSHIP_DEVELOPMENT_KEYS.map((metric) => (
+              <KeyMetricCard key={metric.id} metric={metric} donutSize="lg" />
+            ))}
+          </section>
+        </TabsContent>
+        <TabsContent value="talent-productivity" className="mt-[var(--layout-space-loose)]">
+          <section className="grid grid-cols-2 gap-[var(--layout-space-loose)]">
+            {TALENT_PRODUCTIVITY_KEYS.map((metric) => (
+              <KeyMetricCard key={metric.id} metric={metric} donutSize="sm" />
+            ))}
+          </section>
+        </TabsContent>
+      </Tabs>
+    </div>
+  )
+}
+
+// ── Talent page2:與 Talent page 內容完全相同(同一組 LEADERSHIP_DEVELOPMENT_KEYS /
+// TALENT_PRODUCTIVITY_KEYS 資料),但 user 指定「另一個版本的 layout」——
+//   1. Key 改用真正的 Pie/PieChart 兩區段圓餅圖(而非 page1 的 CircularProgress ring),
+//      帶 (!) hover 時間 + delta vs 2026 Q3(沿用 Leadership 頁 CardTitleWithUpdated/KeyInfoDeltaTag)。
+//   2. Leading data 不再是 accordion 展開列表:Key 自己 + 其 Leading 併成一列「不用圓餅圖」的
+//      扁平小卡(第一個 Key 3 個 leading → 4 張並排;第二個 Key 2 個 leading → 3 張並排,
+//      套用 user 只示範一次、依既有資料結構類推的同一 pattern),點其中一張卡片標題,
+//      下方唯一一個共用長條圖就切換顯示該指標的 2026 Q1-Q4 趨勢。
+// Talent Productivity tab 無 leading data、user 未要求改版,原樣沿用 page1 的 KeyMetricCard。
+
+// Key 的達成率視覺(滿分 100%)—— 這次刻意用 Pie/PieChart 兩區段圓餅圖(非 CircularProgress),
+// 跟 page1 的 ring 拉開視覺差異;remainder 區段用 `var(--secondary)`(非 `var(--divider)`——
+// 踩過後者近乎透明看不見的坑,見 KeyProgressRing 附近註解)確保軌道可見。
+// @story-baseline: @qijenchen/design-system/components/Chart/chart.stories.tsx#DonutChartTrafficSource
+const pieConfig = {
+  value: { label: 'Value', color: 'var(--chart-1)' },
+  remainder: { label: 'Remaining', color: 'var(--secondary)' },
+} satisfies ChartConfig
+
+function KeyPieChart({ value }: { value: number }) {
+  const clamped = Math.max(0, Math.min(100, value))
+  const data = [
+    { name: 'value', amount: clamped },
+    { name: 'remainder', amount: 100 - clamped },
+  ]
+  return (
+    <div className="relative flex-none w-24 h-24">
+      <ChartContainer config={pieConfig} className="h-full w-full">
+        <PieChart>
+          <Pie data={data} dataKey="amount" nameKey="name" innerRadius={34} outerRadius={46} startAngle={90} endAngle={-270} strokeWidth={0}>
+            <Cell fill="var(--color-value)" />
+            <Cell fill="var(--color-remainder)" />
+          </Pie>
+        </PieChart>
+      </ChartContainer>
+      <div className="pointer-events-none absolute inset-0 flex items-center justify-center text-body-lg font-bold tabular-nums">
+        {value}%
+      </div>
+    </div>
+  )
+}
+
+// Key/Leading 共用的單一長條圖(user 指定「長條圖」,與 Talent page1 的折線圖區分)。
+// @story-baseline: @qijenchen/design-system/components/Chart/chart.stories.tsx#BarChartRevenue
+function MetricTrendBarChart({ data }: { data: QuarterPoint[] }) {
+  return (
+    <ChartContainer config={trendConfig} className="h-[140px] w-full mt-[var(--layout-space-loose)]">
+      <BarChart accessibilityLayer data={data} margin={{ top: 8, right: 8, left: 8, bottom: 0 }}>
+        <CartesianGrid vertical={false} />
+        <XAxis dataKey="period" tickLine={false} axisLine={false} tickMargin={6} padding={{ left: 24, right: 24 }} />
+        <YAxis hide domain={['dataMin - 2', 'dataMax + 2']} />
+        <ChartTooltip content={<ChartTooltipContent indicator="dashed" />} />
+        <Bar dataKey="value" fill="var(--color-value)" radius={4} />
+      </BarChart>
+    </ChartContainer>
+  )
+}
+
+// Key metric block:Pie 圓餅圖 + delta(hero)→ Key + Leading 排成一列可點選的扁平小卡(不用圓餅圖)
+// → 底部一個共用長條圖,顯示目前選中卡片的 2026 Q1-Q4 趨勢。「選中」的視覺(primary-subtle 底/字)
+// 借用 DS Button pressed=true 的 tone 語言(button.tsx compoundVariants「pressed 視覺...primary-subtle
+// 底、primary 字」)——但 Button 本身 children 固定包成單行 inline slot(button.tsx L474),
+// 裝不下這裡「標題+數值」兩行的卡片內容,故用 plain button 元素承載,
+// 屬 composition table「Self-contained」族(無共用 row/field anatomy 可套)。
+function KeyWithLeadingSwitcher({ metric }: { metric: KeyMetricDatum }) {
+  const options = [metric, ...(metric.leading ?? [])]
+  const [selectedId, setSelectedId] = useState(metric.id)
+  const selected = options.find((o) => o.id === selectedId) ?? metric
+
+  return (
+    <ScoreCard className="flex-1 min-w-0">
+      <div className="flex items-center gap-[var(--layout-space-loose)]">
+        <KeyPieChart value={metric.value} />
+        <div className="min-w-0">
+          {metric.updatedAt ? (
+            <CardTitleWithUpdated title={metric.label} updatedAt={metric.updatedAt} size="body" />
+          ) : (
+            <div className="text-body font-bold">{metric.label}</div>
+          )}
+          {metric.delta && (
+            <div className="mt-[var(--layout-space-tight)] flex items-center gap-[var(--layout-space-tight)]">
+              <KeyInfoDeltaTag delta={metric.delta} />
+              {metric.deltaSuffix && <span className="text-caption text-fg-muted">{metric.deltaSuffix}</span>}
+            </div>
+          )}
+        </div>
+      </div>
+
+      {options.length > 1 && (
+        <div className="mt-[var(--layout-space-loose)] flex gap-[var(--layout-space-tight)]">
+          {options.map((o) => {
+            const isActive = o.id === selectedId
+            return (
+              <button
+                key={o.id}
+                type="button"
+                aria-pressed={isActive}
+                onClick={() => setSelectedId(o.id)}
+                className={`flex-1 min-w-0 rounded-md border p-[var(--layout-space-tight)] text-left transition-colors ${
+                  isActive ? 'border-transparent bg-primary-subtle' : 'border-divider hover:bg-neutral-hover'
+                }`}
+              >
+                <div className={`text-caption truncate ${isActive ? 'text-primary' : 'text-fg-secondary'}`}>{o.label}</div>
+                <div className={`text-body-lg font-bold tabular-nums mt-[var(--layout-space-tight)] ${isActive ? 'text-primary' : 'text-foreground'}`}>
+                  {o.displayValue}
+                </div>
+              </button>
+            )
+          })}
+        </div>
+      )}
+
+      <MetricTrendBarChart data={selected.trend} />
+    </ScoreCard>
+  )
+}
+
+// @story-baseline: @qijenchen/design-system/components/Tabs/tabs.stories.tsx#Default
+function TalentPage2() {
+  return (
+    <div className="px-[var(--layout-space-tight)] py-[var(--layout-space-tight)]">
+      <Tabs defaultValue="leadership-development">
+        <TabsList>
+          <TabsTrigger value="leadership-development">Leadership Development</TabsTrigger>
+          <TabsTrigger value="talent-productivity">Talent Productivity</TabsTrigger>
+        </TabsList>
+        <TabsContent value="leadership-development" className="mt-[var(--layout-space-loose)]">
+          <section className="flex gap-[var(--layout-space-loose)] items-start">
+            {LEADERSHIP_DEVELOPMENT_KEYS.map((metric) => (
+              <KeyWithLeadingSwitcher key={metric.id} metric={metric} />
+            ))}
+          </section>
+        </TabsContent>
+        <TabsContent value="talent-productivity" className="mt-[var(--layout-space-loose)]">
+          <section className="grid grid-cols-2 gap-[var(--layout-space-loose)]">
+            {TALENT_PRODUCTIVITY_KEYS.map((metric) => (
+              <KeyMetricCard key={metric.id} metric={metric} donutSize="sm" />
+            ))}
+          </section>
+        </TabsContent>
+      </Tabs>
+    </div>
+  )
+}
+
+// ── Leadership page:Leadership Development / Leadership Pipeline 兩個 tab ──────
+// 與 Talent 頁不同:user 這次指定圖表「直接接」在 Key 下方(恆常顯示),非點擊展開 —— 故本節
+// 用 StatKeyCard(靜態疊加 CardTitleWithUpdated + KeyProgressRing/大數字 + delta + 趨勢圖),
+// 不套用 Talent 頁的 Accordion 展開/收合模式(互動模型不同,不可硬套)。
+// user 給定:People Manager Effectiveness 92(滿分 100)+5 vs 2026 Q3。
+const LEADERSHIP_PEOPLE_MANAGER_EFFECTIVENESS: MetricDatum = {
+  id: 'people-manager-effectiveness',
+  label: 'People Manager Effectiveness',
+  value: 92,
+  displayValue: '92',
+  unit: 'percent',
+  trend: quarterlySeries(80, 84, 87, 92),
+  delta: { direction: 'up', text: '+5' },
+  deltaSuffix: 'vs 2026 Q3',
+  updatedAt: '2026/08/26 06:00',
+}
+// user 給定:Manager Development Feedback Survey 91,「其他資訊和 People Manager Effectiveness 一樣」
+// (同一組 delta/updatedAt 格式)—— 視為 People Manager Effectiveness 的 Leading indicator(從屬關係)。
+const LEADERSHIP_MANAGER_DEV_FEEDBACK: MetricDatum = {
+  id: 'manager-development-feedback-survey',
+  label: 'Manager Development Feedback Survey',
+  value: 91,
+  displayValue: '91',
+  unit: 'percent',
+  trend: quarterlySeries(79, 83, 86, 91),
+  delta: { direction: 'up', text: '+5' },
+  deltaSuffix: 'vs 2026 Q3',
+  updatedAt: '2026/08/26 06:00',
+}
+// user 指定「用假數字」,無 Leading data。
+const LEADERSHIP_INTERNAL_MOBILITY: MetricDatum = {
+  id: 'leadership-internal-mobility',
+  label: 'Internal Mobility',
+  value: 40,
+  displayValue: '40%',
+  unit: 'percent',
+  trend: quarterlySeries(28, 32, 35, 40),
+  delta: { direction: 'up', text: '+5' },
+  deltaSuffix: 'vs 2026 Q3',
+  updatedAt: '2026/08/26 06:00',
+}
+
+// Leadership Pipeline tab —— user 指定「現在就用假數字設計」succession / pipeline 相關 Key metrics,
+// 沿用同一套 StatKeyCard 呈現(無 Leading data,user 未提供從屬指標)。
+const LEADERSHIP_SUCCESSION_COVERAGE: MetricDatum = {
+  id: 'succession-coverage',
+  label: 'Succession Coverage',
+  value: 64,
+  displayValue: '64%',
+  unit: 'percent',
+  trend: quarterlySeries(55, 58, 61, 64),
+  delta: { direction: 'up', text: '+3' },
+  deltaSuffix: 'vs 2026 Q3',
+  updatedAt: '2026/08/26 06:00',
+}
+const LEADERSHIP_READY_NOW_SUCCESSOR_RATIO: MetricDatum = {
+  id: 'ready-now-successor-ratio',
+  label: 'Ready-Now Successor Ratio',
+  value: 41,
+  displayValue: '41%',
+  unit: 'percent',
+  trend: quarterlySeries(48, 46, 43, 41),
+  delta: { direction: 'down', text: '-2' },
+  deltaSuffix: 'vs 2026 Q3',
+  updatedAt: '2026/08/26 06:00',
+}
+
+// 靜態(非點擊展開)Key metric 卡片內容:標題(選填 (!) hover 時間)+ ring/大數字 + 選填 delta +
+// 恆常顯示的季度趨勢圖。只回傳內容,外層 chrome(ScoreCard)交給 caller —— 讓 caller 可以把兩張
+// StatKeyCard 併入同一個 ScoreCard 表達從屬關係(見 LeadershipPage「Leading indicator of」分組)。
+function StatKeyCard({ metric }: { metric: MetricDatum }) {
+  return (
+    <div className="flex-1 min-w-0">
+      {metric.updatedAt ? (
+        <CardTitleWithUpdated title={metric.label} updatedAt={metric.updatedAt} size="body" />
+      ) : (
+        <div className="text-body font-bold">{metric.label}</div>
+      )}
+      <div className="mt-[var(--layout-space-loose)]">
+        {metric.unit === 'percent' ? (
+          <KeyProgressRing value={metric.value} displayValue={metric.displayValue} />
+        ) : (
+          <span className="text-h2 font-bold tabular-nums">{metric.displayValue}</span>
+        )}
+      </div>
+      {metric.delta && (
+        <div className="mt-[var(--layout-space-tight)] flex items-center gap-[var(--layout-space-tight)]">
+          <KeyInfoDeltaTag delta={metric.delta} />
+          {metric.deltaSuffix && <span className="text-caption text-fg-muted">{metric.deltaSuffix}</span>}
+        </div>
+      )}
+      <MetricTrendChart data={metric.trend} />
+    </div>
+  )
+}
+
+// @story-baseline: @qijenchen/design-system/components/Tabs/tabs.stories.tsx#Default
+function LeadershipPage() {
+  return (
+    <div className="px-[var(--layout-space-tight)] py-[var(--layout-space-tight)]">
+      <Tabs defaultValue="leadership-development">
+        <TabsList>
+          <TabsTrigger value="leadership-development">Leadership Development</TabsTrigger>
+          <TabsTrigger value="leadership-pipeline">Leadership Pipeline</TabsTrigger>
+        </TabsList>
+        <TabsContent value="leadership-development" className="mt-[var(--layout-space-loose)]">
+          <section className="flex gap-[var(--layout-space-loose)] items-stretch">
+            {/* People Manager Effectiveness + 其 Leading indicator 併在同一張 ScoreCard,中間一條
+                divider 分隔、右側加「Leading indicator of ...」標籤 —— 明確表達從屬關係(user 指定
+                「要看得出來是從屬關係」),而非兩張各自獨立、看不出關聯的卡片。 */}
+            <ScoreCard className="flex-[2] min-w-0">
+              <div className="flex gap-[var(--layout-space-loose)]">
+                <StatKeyCard metric={LEADERSHIP_PEOPLE_MANAGER_EFFECTIVENESS} />
+                <div className="w-px bg-divider self-stretch" />
+                <div className="flex-1 min-w-0">
+                  <div className="text-caption font-medium text-fg-muted mb-[var(--layout-space-tight)]">
+                    Leading indicator of People Manager Effectiveness
+                  </div>
+                  <StatKeyCard metric={LEADERSHIP_MANAGER_DEV_FEEDBACK} />
+                </div>
+              </div>
+            </ScoreCard>
+            <ScoreCard className="flex-1 min-w-0">
+              <StatKeyCard metric={LEADERSHIP_INTERNAL_MOBILITY} />
+            </ScoreCard>
+          </section>
+        </TabsContent>
+        <TabsContent value="leadership-pipeline" className="mt-[var(--layout-space-loose)]">
+          <section className="flex gap-[var(--layout-space-loose)] items-start">
+            <ScoreCard className="flex-1 min-w-0">
+              <StatKeyCard metric={LEADERSHIP_SUCCESSION_COVERAGE} />
+            </ScoreCard>
+            <ScoreCard className="flex-1 min-w-0">
+              <StatKeyCard metric={LEADERSHIP_READY_NOW_SUCCESSOR_RATIO} />
+            </ScoreCard>
+          </section>
+        </TabsContent>
+      </Tabs>
+    </div>
+  )
+}
+
+// 2026-08-31 user 指定改採 TSMC design guideline「頂部佈局 Header」:左上 logo 常駐在跨頁 global header,
+// 下面才是當前頁的 page header(顯示內容標題)。對齊 DS AppShell primary-header mode(app-shell.spec.md
+// 「primary-header = primary-sidebar + 一條 global header」)——不是重新設計,是切換既有 layout mode。
+// viewportInsetTop 讓 sidebar 從 globalHeader 底部起算(primary-header mode 必傳,否則 sidebar 會蓋住
+// globalHeader,見 sidebar.tsx「可被 viewportInsetTop prop override(per AppShell primary-header)」)。
 function AppSidebar() {
   return (
-    <Sidebar collapsible="icon">
-      <SidebarHeader>
-        <div className="flex items-center gap-2 min-w-0 group-data-[collapsible=icon]:justify-center">
-          <Avatar alt="HR Pulse" size={24} shape="square" color="indigo" solid />
-          <span className="text-body-lg font-medium truncate group-data-[collapsible=icon]:hidden">HR Pulse</span>
-        </div>
-      </SidebarHeader>
+    <Sidebar collapsible="icon" viewportInsetTop="var(--chrome-header-height)">
       <SidebarContent>
         <SidebarGroup>
           <SidebarGroupContent>
@@ -375,40 +1030,84 @@ function AppSidebar() {
           </SidebarGroupContent>
         </SidebarGroup>
       </SidebarContent>
-      <SidebarFooter>
-        <SidebarMenu>
-          <SidebarMenuItem>
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <SidebarMenuButton asChild tooltip="檢視身分">
-                  <button type="button" aria-label="檢視身分與帳號設定">
-                    <ItemAvatar alt="CHRO" color="indigo" />
-                    <span data-sidebar="menu-label" className="min-w-0 flex-1 truncate">View as CHRO</span>
-                  </button>
-                </SidebarMenuButton>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="start" minWidth={280}>
-                <DropdownMenuGroup>
-                  <DropdownMenuLabel>當前使用者</DropdownMenuLabel>
-                  <DropdownMenuItem startIcon={User}>個人資料</DropdownMenuItem>
-                  <DropdownMenuItem startIcon={Settings}>設定</DropdownMenuItem>
-                </DropdownMenuGroup>
-                <DropdownMenuGroup>
-                  <DropdownMenuItem startIcon={LogOut}>登出</DropdownMenuItem>
-                </DropdownMenuGroup>
-              </DropdownMenuContent>
-            </DropdownMenu>
-          </SidebarMenuItem>
-        </SidebarMenu>
-      </SidebarFooter>
     </Sidebar>
   )
 }
 
+// Logo(WorkspaceBrand)——primary-header mode 放 GlobalHeader 左側,不再放 SidebarHeader
+// (app-shell.spec.md「WorkspaceBrand 放置 SSOT」:globalHeader 存在時 sidebar 內不重複)。
+function WorkspaceBrand() {
+  return (
+    <div className="flex items-center gap-[var(--layout-space-tight)] min-w-0">
+      <Avatar alt="HR Pulse" size={24} shape="square" color="indigo" solid />
+      <span className="text-body-lg font-medium truncate">HR Pulse</span>
+    </div>
+  )
+}
+
+// 通知內容 —— 最新一筆在最上面(對齊 INSIGHTS 同一「新→舊」慣例)。皆為 user 給定原文。
+const NOTIFICATIONS = [
+  { id: 'hrpo-insights', text: 'HRPO Analyses Team has uploaded the latest insights', time: '2026/08/26 13:00' },
+  { id: 'new-hire-perf', text: 'New Hire performance data has been updated!', time: '2026/08/26 06:00' },
+]
+
+// @story-baseline: @qijenchen/design-system/components/Popover/popover.stories.tsx#FilterPanel —
+// List-as-region 場景(見 popover.tsx PopoverBody docblock):PopoverBody 撤掉 chrome padding,
+// consumer 自管 list 結構。
+function NotificationsPopover() {
+  return (
+    <Popover>
+      <PopoverTrigger asChild>
+        <Button
+          variant="tertiary"
+          size="sm"
+          iconOnly
+          startIcon={Bell}
+          aria-label={`通知 (${NOTIFICATIONS.length} 則)`}
+          overlayBadge={<Badge count={NOTIFICATIONS.length} variant="high" />}
+        />
+      </PopoverTrigger>
+      <PopoverContent align="end" className="w-80">
+        <PopoverHeader>
+          <PopoverTitle>Notifications</PopoverTitle>
+        </PopoverHeader>
+        <PopoverBody className="!px-0 !py-0">
+          <div className="flex flex-col py-[var(--layout-space-tight)]">
+            {NOTIFICATIONS.map((n) => (
+              <div
+                key={n.id}
+                className="flex flex-col gap-[var(--layout-space-tight)] px-[var(--layout-space-loose)] py-[var(--layout-space-tight)] hover:bg-neutral-hover"
+              >
+                <p className="text-body text-foreground m-0">{n.text}</p>
+                <span className="text-caption text-fg-muted">{n.time}</span>
+              </div>
+            ))}
+          </div>
+        </PopoverBody>
+      </PopoverContent>
+    </Popover>
+  )
+}
+
+// @story-baseline: @qijenchen/design-system/components/AccountMenu/account-menu.stories.tsx
+// 跨頁 global header:logo(左)+ sidebar toggle(leadingRail)+ 通知 + 帳號入口(右)。
+// 對齊 app-shell.spec.md「帳號入口(Account entry)放置 SSOT」——primary-header mode 帳號入口在
+// globalHeader 右側,不放 SidebarFooter(避免重複)。
+function GlobalHeader() {
+  return (
+    <ChromeHeader className="bg-surface" leadingRail={<SidebarTrigger />}>
+      <WorkspaceBrand />
+      <div className="flex-1" />
+      <NotificationsPopover />
+      <AccountMenu user={{ name: 'CHRO', avatar: { color: 'indigo' } }} />
+    </ChromeHeader>
+  )
+}
+
+// 當前頁 local page header——只保留頁面層級內容(標題 / org 篩選),trigger 與帳號已在 GlobalHeader。
 function PageHeader({ title, org, onOrgChange }: { title: string; org: string; onOrgChange: (value: string) => void }) {
   return (
     <ChromeHeader className="bg-surface">
-      <SidebarTrigger />
       <h1 className="text-body-lg font-medium flex-1 truncate">{title}</h1>
       <Tag color="blue">CHRO view</Tag>
       <Select
@@ -418,15 +1117,6 @@ function PageHeader({ title, org, onOrgChange }: { title: string; org: string; o
         aria-label="Organization"
         width="hug"
       />
-      <Button
-        variant="tertiary"
-        size="sm"
-        iconOnly
-        startIcon={Bell}
-        aria-label="通知 (3 則)"
-        overlayBadge={<Badge count={3} variant="high" />}
-      />
-      <Avatar alt="CHRO" size={34} color="indigo" solid>CH</Avatar>
     </ChromeHeader>
   )
 }
@@ -439,74 +1129,91 @@ function ScoreCard({ children, className = '' }: { children: React.ReactNode; cl
   )
 }
 
+// Hiring Gap 卡片獨立成 memo 元件、只吃恆定不變的 onHover(useState setter 本身 reference
+// 永遠穩定)——hover 狀態變化因此完全不會讓這棵 <LineChart> 子樹重新 render(見上方 GapDot
+// 註解「根因排查」第 3 點:reduce render 才是解法,不是換更精準的 hit-target)。
+const HiringGapChart = memo(function HiringGapChart({ onHover }: { onHover: (info: GapHoverInfo | null) => void }) {
+  return (
+    <ScoreCard className="flex-1 min-w-0 min-h-0 flex flex-col overflow-hidden">
+      <CardTitleWithUpdated title="Hiring Gap" updatedAt="2026/08/26 06:00" />
+      {/* 標題與圖表間距拉開至 16px(loose token,對齊 designer 規範下限)。
+          2026-09-14 user 指定改成折線圖:IDL / DL 各一條線,只畫 Gap 絕對數字(如「2026 Q1 IDL Gap 500」)。
+          @story-baseline: @qijenchen/design-system/components/Chart/chart.stories.tsx#LineChartResponseTime */}
+      <ChartContainer config={hiringGapConfig} className="flex-1 min-h-0 mt-[var(--layout-space-loose)]">
+        <LineChart accessibilityLayer data={HIRING_GAP_TREND} margin={{ top: 20, right: 30, bottom: 12 }}>
+          <CartesianGrid vertical={false} />
+          <XAxis dataKey="quarter" tickLine={false} axisLine={false} tickMargin={8} />
+          {/* 數值集中在 ~900-970,固定 [0, dataMax] 會讓線幾乎貼平;改用貼緊資料範圍的動態 domain,
+              上下各留白給節點常駐標籤(top)與 legend(bottom)。 */}
+          <YAxis tickLine={false} axisLine={false} width={40} domain={['dataMin - 60', 'dataMax + 40']} />
+          {/* 無 <ChartTooltip> —— hover 明細改由每個節點自己的 GapDot(見上方定義)負責,
+              recharts 內建的 axis 共用 tooltip 在這張圖不需要、也達不到 user 要的「各節點分開」
+              效果(見 GapDot 上方註解:LineChart 架構限制)。 */}
+          {/* Recharts Legend 預設依 dataKey 字母排序(dlGap < idlGap)自動排 DL 在前,與 IDL 排最前面的要求相反 —
+              改用自訂 content function,直接照 hiringGapConfig 順序(IDL 先)畫,不經 recharts 自動排序
+              (同 Turnover rate legend 已用的手法)。 */}
+          <ChartLegend
+            content={() => (
+              <div className="flex items-center justify-center gap-[var(--layout-space-loose)] pt-[var(--layout-space-tight)]">
+                {(['idlGap', 'dlGap'] as const).map((key) => (
+                  <div key={key} className="flex items-center gap-[var(--layout-space-tight)] text-fg-secondary text-caption">
+                    <Square size={8} fill={hiringGapConfig[key].color} stroke="none" />
+                    {hiringGapConfig[key].label}
+                  </div>
+                ))}
+              </div>
+            )}
+          />
+          {/* user 指定 Gap 數值要「直接寫在節點上面」,非只 hover 才看得到 —— 加 LabelList 常駐標籤。
+              IDL 標在上方、DL 標在下方,避免兩條線數值接近(~900-970)時標籤互相重疊。
+              dot 換成 GapDot(見上方定義)—— 每個節點自己回報 hover 明細給 GapHoverCard,取代
+              recharts 內建共用 axis tooltip(shared=false 對 LineChart 不生效,已移除該行 <ChartTooltip>)。
+              activeDot={false}:recharts 就算沒掛 <ChartTooltip> 也會在滑鼠移到節點附近時,自己
+              疊一顆 class="recharts-dot" 的 active-dot 蓋在最上層(比我們的 GapDot 晚進 DOM、
+              後畫蓋上),導致滑鼠明明沒動卻被判定「離開」我們的命中區——這才是 hover 一直閃斷
+              的根因(GapDot key 穩定、React 不會重掛;元件也已用 React.memo 隔離重渲染,兩者都
+              排除後才抓到是這顆 recharts 自己補的圓)。關掉它,hover 完全交給 GapDot 自己處理。 */}
+          <Line
+            dataKey="idlGap"
+            type="monotone"
+            stroke="var(--color-idlGap)"
+            strokeWidth={2}
+            activeDot={false}
+            dot={(p: DotItemDotProps) => (
+              <GapDot key={`idl-${p.index}`} cx={p.cx} cy={p.cy} payload={p.payload as HiringGapRow} seriesKey="idlGap" onHover={onHover} />
+            )}
+          >
+            <LabelList dataKey="idlGap" position="top" offset={16} formatter={hiringGapLabelFormatter} className="text-caption" style={{ fill: 'var(--color-idlGap)' }} />
+          </Line>
+          <Line
+            dataKey="dlGap"
+            type="monotone"
+            stroke="var(--color-dlGap)"
+            strokeWidth={2}
+            activeDot={false}
+            dot={(p: DotItemDotProps) => (
+              <GapDot key={`dl-${p.index}`} cx={p.cx} cy={p.cy} payload={p.payload as HiringGapRow} seriesKey="dlGap" onHover={onHover} />
+            )}
+          >
+            <LabelList dataKey="dlGap" position="bottom" offset={16} formatter={hiringGapLabelFormatter} className="text-caption" style={{ fill: 'var(--color-dlGap)' }} />
+          </Line>
+        </LineChart>
+      </ChartContainer>
+    </ScoreCard>
+  )
+})
+
 function OverviewPage() {
+  // GapHoverCard 浮層資料——見 HiringGapChart/GapDot 上方註解:必須跟 <LineChart> 子樹的
+  // render 完全隔離(memo + 恆定 onHover),所以浮層本身在這裡、chart 子樹在別的 memo 元件。
+  const [gapHoverInfo, setGapHoverInfo] = useState<GapHoverInfo | null>(null)
   return (
     <div className="px-[var(--layout-space-tight)] py-[var(--layout-space-tight)] space-y-[var(--layout-space-tight)]">
+      <GapHoverCard info={gapHoverInfo} />
       {/* Row 1: Turnover rate(折線,三系列)+ Hiring gap(長條)— 橫向兩張卡 */}
       {/* 2026-08-31 user 指定:Turnover rate 與 Hiring Gap 兩張圖表左右交換位置(Hiring Gap 現在在左)。 */}
       <section className="flex gap-[var(--layout-space-loose)] h-[280px]">
-        <ScoreCard className="flex-1 min-w-0 min-h-0 flex flex-col overflow-hidden">
-          <CardTitleWithUpdated title="Hiring Gap" updatedAt="2026/08/26 06:00" />
-          {/* 標題與圖表間距拉開至 16px(loose token,對齊 designer 規範下限)。
-              @story-baseline: @qijenchen/design-system/components/Chart/chart.stories.tsx#BarChartRevenue —
-              IDL 排前面(藍)、DL 排後面(紫),各自 Approved(深)+ Gap(淺)疊加。margin.top 為圖表 SVG 座標數值
-              (非 Tailwind spacing class,不受 layout-space 規則約束),留白給長條上方 +Gap 註記。
-              單一 Y 軸,起始 10,000、每格 1,000(user 指定)。 */}
-          <ChartContainer config={hiringGapConfig} className="flex-1 min-h-0 mt-[var(--layout-space-loose)]">
-            <BarChart accessibilityLayer data={HIRING_GAP_TREND} margin={{ top: 28 }}>
-              <CartesianGrid vertical={false} />
-              <XAxis dataKey="quarter" tickLine={false} axisLine={false} tickMargin={8} />
-              {/* 每 1,000 一格(user 指定),但 12 格文字塞進 ~200px 高會互相重疊,故只在偶數格(每 2,000)顯示文字標籤、
-                  奇數格只留格線 —— 常見 major/minor gridline 慣例,格線解析度仍是 1,000。 */}
-              <YAxis
-                tickLine={false}
-                axisLine={false}
-                width={52}
-                domain={[10000, 21000]}
-                ticks={[10000, 11000, 12000, 13000, 14000, 15000, 16000, 17000, 18000, 19000, 20000, 21000]}
-                interval={0}
-                tickFormatter={(v: number) => (v % 2000 === 0 ? v.toLocaleString() : '')}
-              />
-              <ChartTooltip content={<ChartTooltipContent formatter={hiringGapTooltipFormatter} />} />
-              <Bar dataKey="idlApproved" stackId="idl" fill="var(--color-idlApproved)" radius={2} />
-              <Bar dataKey="idlGap" stackId="idl" fill="var(--color-idlGap)" radius={2}>
-                <LabelList
-                  dataKey="idlGap"
-                  position="top"
-                  formatter={hiringGapLabelFormatter}
-                  className="text-caption"
-                  style={{ fill: 'var(--fg-secondary)' }}
-                />
-              </Bar>
-              <Bar dataKey="dlApproved" stackId="dl" fill="var(--color-dlApproved)" radius={2} />
-              <Bar dataKey="dlGap" stackId="dl" fill="var(--color-dlGap)" radius={2}>
-                <LabelList
-                  dataKey="dlGap"
-                  position="top"
-                  formatter={hiringGapLabelFormatter}
-                  className="text-caption"
-                  style={{ fill: 'var(--fg-secondary)' }}
-                />
-              </Bar>
-              {/* Recharts Legend 預設會依內部 stackId 字母排序(dl < idl)自動排 DL 在前,與 IDL 排最前面的要求相反 —
-                  改用自訂 content function,直接照 hiringGapConfig 順序(IDL 先)畫兩個色塊,不經 recharts 自動排序。 */}
-              <ChartLegend
-                content={() => (
-                  <div className="flex items-center justify-center gap-[var(--layout-space-loose)] pt-[var(--layout-space-tight)]">
-                    <div className="flex items-center gap-[var(--layout-space-tight)] text-fg-secondary text-caption">
-                      <Square size={8} fill={hiringGapConfig.idlApproved.color} stroke="none" />
-                      IDL
-                    </div>
-                    <div className="flex items-center gap-[var(--layout-space-tight)] text-fg-secondary text-caption">
-                      <Square size={8} fill={hiringGapConfig.dlApproved.color} stroke="none" />
-                      DL
-                    </div>
-                  </div>
-                )}
-              />
-            </BarChart>
-          </ChartContainer>
-        </ScoreCard>
+        <HiringGapChart onHover={setGapHoverInfo} />
 
         <ScoreCard className="flex-1 min-w-0 min-h-0 flex flex-col overflow-hidden">
           <CardTitleWithUpdated title="Turnover rate" updatedAt="2026/08/26 06:00" />
@@ -514,9 +1221,29 @@ function OverviewPage() {
           <ChartContainer config={turnoverConfig} className="flex-1 min-h-0 mt-[var(--layout-space-loose)]">
             <LineChart accessibilityLayer data={TURNOVER_TREND}>
               <CartesianGrid vertical={false} />
-              <XAxis dataKey="quarter" tickLine={false} axisLine={false} tickMargin={8} />
-              <YAxis tickLine={false} axisLine={false} width={28} domain={[0, 10]} />
-              <ChartTooltip content={<ChartTooltipContent indicator="line" />} />
+              {/* 12 個月改用短月份縮寫(Jan/Feb/...)顯示,對齊本檔其餘英文文案語系(非中文「月」)。 */}
+              <XAxis
+                dataKey="month"
+                tickLine={false}
+                axisLine={false}
+                tickMargin={8}
+                interval={0}
+                padding={{ left: 12, right: 12 }}
+                tickFormatter={(v: string) => MONTH_ABBR[Number(v.slice(5)) - 1]}
+              />
+              {/* 累進制資料全年落在 0-3(user 給定上限),固定 [0, 10] 會讓線貼底看不出成長曲線 —— 改用 [0, 3]。 */}
+              <YAxis tickLine={false} axisLine={false} width={28} domain={[0, 3]} />
+              <ChartTooltip
+                content={
+                  <ChartTooltipContent
+                    indicator="line"
+                    labelFormatter={(label: unknown) => {
+                      const v = String(label)
+                      return `${MONTH_ABBR[Number(v.slice(5)) - 1]} ${v.slice(0, 4)}`
+                    }}
+                  />
+                }
+              />
               {/* Recharts Legend 預設依 dataKey 字母排序(newcomer < turnover < voluntary),
                   跟 user 指定「Turnover / Newcomer turnover / Voluntary turnover」順序不同 —
                   改用自訂 content function,直接照 turnoverConfig 順序畫,不經 recharts 自動排序
@@ -542,7 +1269,10 @@ function OverviewPage() {
       </section>
 
       {/* Row 2: 5 張 key information 小卡,等寬 */}
-      <section className="grid grid-cols-5 gap-[var(--layout-space-loose)]">
+      {/* grid-rows-[auto_auto_auto] + 每張卡自己 grid-rows-subgrid(見 KeyInfoCard):讓 5 張卡的
+          title/數字/delta 三列各自的高度跨卡「取最高者」對齊,不論某張標題換成幾行,數字那一列
+          永遠從同一個 y 起算 —— user 指定「數字%那行高度強制對齊」。 */}
+      <section className="grid grid-cols-5 grid-rows-[auto_auto_auto] gap-[var(--layout-space-loose)]">
         {KEY_INFO_CARDS.map((card) => (
           <KeyInfoCard key={card.id} card={card} />
         ))}
@@ -625,17 +1355,46 @@ export default function App() {
   const [activeId, setActiveId] = useState<string>('overview')
   const [org, setOrg] = useState('overall')
 
-  const activePillar = activeId in PILLAR_DETAILS ? PILLAR_DETAILS[activeId as PillarId] : undefined
+  // 'talent' / 'talent-2' / 'leadership' 走各自專屬頁面(tab + key/leading drill-down),
+  // 不套用其餘 pillar 共用的 PillarDetailPage template(見 PillarId type 註解)。
+  const isTalent = activeId === 'talent'
+  const isTalent2 = activeId === 'talent-2'
+  const isLeadership = activeId === 'leadership'
+  const activePillar =
+    !isTalent && !isTalent2 && !isLeadership && activeId in PILLAR_DETAILS ? PILLAR_DETAILS[activeId as PillarId] : undefined
+  const pageTitle = isTalent
+    ? 'Talent'
+    : isTalent2
+      ? 'Talent (Layout v2)'
+      : isLeadership
+        ? 'Leadership'
+        : activePillar
+          ? `${activePillar.label} Detail`
+          : '2026 Q4 Overview'
 
   return (
     <TooltipProvider delayDuration={500} skipDelayDuration={300}>
       <SidebarProvider activeId={activeId} onActiveChange={setActiveId}>
+        {/* @story-baseline: @qijenchen/design-system/components/AppShell/app-shell.stories.tsx#PrimaryHeader —
+            2026-08-31 user 指定改採 TSMC guideline「頂部佈局 Header」:logo 在 globalHeader 左、
+            page header 在下方顯示內容標題,對齊 AppShell primary-header layout mode。 */}
         <AppShell
-          layout="primary-sidebar"
+          layout="primary-header"
+          globalHeader={<GlobalHeader />}
           sidebar={<AppSidebar />}
-          header={<PageHeader title={activePillar ? `${activePillar.label} Detail` : 'Executive Overview'} org={org} onOrgChange={setOrg} />}
+          header={<PageHeader title={pageTitle} org={org} onOrgChange={setOrg} />}
         >
-          {activePillar ? <PillarDetailPage pillar={activePillar} /> : <OverviewPage />}
+          {isTalent ? (
+            <TalentPage />
+          ) : isTalent2 ? (
+            <TalentPage2 />
+          ) : isLeadership ? (
+            <LeadershipPage />
+          ) : activePillar ? (
+            <PillarDetailPage pillar={activePillar} />
+          ) : (
+            <OverviewPage />
+          )}
         </AppShell>
       </SidebarProvider>
     </TooltipProvider>
