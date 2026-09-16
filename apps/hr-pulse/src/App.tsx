@@ -18,14 +18,13 @@
 //
 // 導覽:sidebar 項目(SidebarMenuButton id=)自動驅動 SidebarProvider.activeId → 各自 pillar 細節頁。
 
-import { memo, useState } from 'react'
-import { createPortal } from 'react-dom'
+import { useState } from 'react'
 import {
   Bar,
   BarChart,
   CartesianGrid,
   Cell,
-  type DotItemDotProps,
+  ComposedChart,
   LabelList,
   Line,
   LineChart,
@@ -227,107 +226,28 @@ const HIRING_GAP_TREND: HiringGapRow[] = [
   { quarter: '2026 Q3', idlBudget: 18700, idlActual: 15950, idlForecast: 1785, idlGap: 965, dlBudget: 19800, dlActual: 16950, dlForecast: 1900, dlGap: 950 },
   { quarter: '2026 Q4', idlBudget: 19000, idlActual: 16200, idlForecast: 1845, idlGap: 955, dlBudget: 20100, dlActual: 17200, dlForecast: 1960, dlGap: 940 },
 ]
-// IDL 藍色 / DL 紫色(user 既有配色決策延續);折線是唯一系列,改用主色階(6)而非先前 bar 版本
-// 疊加用的淺色階(3),確保線條在白底上對比足夠。IDL 排最前面(順序帶動 legend 順序)。
-const hiringGapConfig = {
-  idlGap: { label: 'IDL Gap', color: 'var(--color-blue-6)' },
-  dlGap: { label: 'DL Gap', color: 'var(--color-purple-6)' },
-} satisfies ChartConfig
+// 2026-09-16 user 指定改版:IDL / DL 拆成兩張獨立長條圖(同卡片內、視覺分開),取代原本疊在
+// 一起的雙折線。每張各自畫 Budget(主色)+ Actual(淺色)長條、數字直接標在長條上;Gap 折線疊在
+// 長條圖上方(雙 Y 軸手法,見 HiringGapPanel),同樣把數字直接標在節點上。因為現在每張圖只有一條
+// 折線(不再是 IDL/DL 共用一張圖),先前為了解決「兩條線 hover 黏在一起」而做的 GapDot 自訂
+// hover portal(見 git history)不再需要——單一數列用 recharts 內建 <ChartTooltip> 即可,不會
+// 有黏在一起的問題,大幅簡化。
+type GapPanelDatum = { quarter: string; budget: number; actual: number; gap: number }
 
-// 2026-09-14 user 指定 IDL/DL 節點的 hover 要「分開」,各自獨立顯示自己的明細,不要黏在一起。
-// recharts v3 的 LineChart 硬寫死 allowedTooltipTypes=['axis'](見 recharts LineChart.js),
-// Tooltip 的 shared={false} 對 LineChart 完全不生效(驗證失敗 silently fallback 回 axis 共用模式)——
-// 這是 recharts 架構限制,不是本檔設定問題。
-//
-// 實測排查(依序排除):
-// (1) 改每節點包一個 DS `<Tooltip>`(Radix)—— Radix 自己的 hover 偵測(onPointerMove +
-//     hasPointerMoveOpenedRef)量到 data-state 恆為 closed。
-// (2) 改成父層 state 直接控制 `open`,節點只回報 onMouseEnter/onMouseLeave —— 仍量到
-//     enter 後緊接著一個 leave(native listener 直接掛在該 DOM node 上也一樣),可見圓點 r=4
-//     命中範圍過小不是主因(疊 r=10 透明圓當命中區後現象不變)。
-// (3) 根因:hover 觸發的 state 更新讓 OverviewPage 重新渲染,連帶讓整棵 <LineChart> 子樹
-//     被 React 重新呼叫 render——recharts 對此的反應是把該節點的 DOM 換掉(移除舊節點時瀏覽器
-//     會對它補發一個 mouseleave),不是滑鼠真的離開。
-// 最終作法:hover 資料完全不進 recharts 子樹的 render 路徑——GapDot 只在原生 mouse 事件裡把
-// {payload, 螢幕座標} 回報給父層,浮層改成獨立的 GapHoverCard 用 createPortal 掛到
-// document.body(順便繞開 ScoreCard 的 overflow-hidden 裁切),完全在 chart 外部渲染;
-// 再用 React.memo 包住整張 Hiring Gap 卡片、餵它恆定不變的 onHover(useState setter 本身
-// reference 穩定),讓 hover 狀態變化「不會」讓 <LineChart> 重新 render,從源頭消除上述換 DOM。
-type GapHoverInfo = { seriesKey: 'idlGap' | 'dlGap'; payload: HiringGapRow; x: number; y: number }
-
-function GapDot({
-  cx,
-  cy,
-  payload,
-  seriesKey,
-  onHover,
-}: {
-  cx?: number
-  cy?: number
-  payload?: HiringGapRow
-  seriesKey: 'idlGap' | 'dlGap'
-  onHover: (info: GapHoverInfo | null) => void
-}) {
-  if (cx == null || cy == null || !payload) return null
-  return (
-    <g
-      className="cursor-pointer"
-      onMouseEnter={(e) => onHover({ seriesKey, payload, x: e.clientX, y: e.clientY })}
-      onMouseMove={(e) => onHover({ seriesKey, payload, x: e.clientX, y: e.clientY })}
-      onMouseLeave={() => onHover(null)}
-    >
-      <circle cx={cx} cy={cy} r={6} fill="transparent" stroke="none" pointerEvents="all" />
-      <circle cx={cx} cy={cy} r={4} fill={hiringGapConfig[seriesKey].color} stroke="none" pointerEvents="none" />
-    </g>
-  )
+function buildGapPanelData(prefix: 'idl' | 'dl'): GapPanelDatum[] {
+  return HIRING_GAP_TREND.map((row) => ({
+    quarter: row.quarter,
+    budget: prefix === 'idl' ? row.idlBudget : row.dlBudget,
+    actual: prefix === 'idl' ? row.idlActual : row.dlActual,
+    gap: prefix === 'idl' ? row.idlGap : row.dlGap,
+  }))
 }
+const IDL_GAP_PANEL_DATA = buildGapPanelData('idl')
+const DL_GAP_PANEL_DATA = buildGapPanelData('dl')
 
-// GapDot 回報的 hover 明細——渲染在 recharts 子樹之外(見上方註解),用固定定位貼著游標,
-// 視覺對齊 DS TooltipContent 樣式(bg-tooltip / text-on-emphasis / shadow-elevation-200)。
-// @story-baseline: @qijenchen/design-system/components/Tooltip/tooltip.stories.tsx#Default
-function GapHoverCard({ info }: { info: GapHoverInfo | null }) {
-  if (!info) return null
-  const { seriesKey, payload, x, y } = info
-  const budget = seriesKey === 'idlGap' ? payload.idlBudget : payload.dlBudget
-  const actual = seriesKey === 'idlGap' ? payload.idlActual : payload.dlActual
-  const forecast = seriesKey === 'idlGap' ? payload.idlForecast : payload.dlForecast
-  const gap = seriesKey === 'idlGap' ? payload.idlGap : payload.dlGap
-  return createPortal(
-    <div
-      className="pointer-events-none fixed z-50 max-w-[17.5rem] break-words rounded-md bg-tooltip p-[var(--layout-space-tight)] text-body font-normal text-on-emphasis"
-      style={{ left: x + 14, top: y + 14, boxShadow: 'var(--elevation-200)' }}
-    >
-      <div data-theme="dark" className="flex w-full flex-col gap-[var(--layout-space-tight)]">
-        <span className="flex items-center gap-[var(--layout-space-tight)] font-medium">
-          <Square size={8} fill={hiringGapConfig[seriesKey].color} stroke="none" />
-          {payload.quarter} · {hiringGapConfig[seriesKey].label}
-        </span>
-        <div className="flex flex-col gap-[var(--layout-space-tight)] text-caption">
-          <div className="flex items-center justify-between gap-[var(--layout-space-loose)]">
-            <span className="text-fg-muted">Budget</span>
-            <span className="font-mono tabular-nums">{budget.toLocaleString()}</span>
-          </div>
-          <div className="flex items-center justify-between gap-[var(--layout-space-loose)]">
-            <span className="text-fg-muted">Actual</span>
-            <span className="font-mono tabular-nums">{actual.toLocaleString()}</span>
-          </div>
-          <div className="flex items-center justify-between gap-[var(--layout-space-loose)]">
-            <span className="text-fg-muted">Forecast</span>
-            <span className="font-mono tabular-nums">{forecast.toLocaleString()}</span>
-          </div>
-          <div className="flex items-center justify-between gap-[var(--layout-space-loose)]">
-            <span className="text-fg-muted">Gap w/ TO</span>
-            <span className="font-mono font-medium tabular-nums">{gap.toLocaleString()}</span>
-          </div>
-        </div>
-      </div>
-    </div>,
-    document.body,
-  )
-}
-
-// 節點上方常駐標籤(user 指定「直接寫在節點上面」,非只有 hover 才看得到)。
-function hiringGapLabelFormatter(label: unknown) {
+// 長條與折線節點上方常駐標籤(user 指定「把絕對數字寫出來」/「折線每個點要直接寫出 gap 的數字」,
+// 非只有 hover 才看得到)。
+function hiringGapValueFormatter(label: unknown) {
   return Number(label).toLocaleString()
 }
 
@@ -1129,91 +1049,103 @@ function ScoreCard({ children, className = '' }: { children: React.ReactNode; cl
   )
 }
 
-// Hiring Gap 卡片獨立成 memo 元件、只吃恆定不變的 onHover(useState setter 本身 reference
-// 永遠穩定)——hover 狀態變化因此完全不會讓這棵 <LineChart> 子樹重新 render(見上方 GapDot
-// 註解「根因排查」第 3 點:reduce render 才是解法,不是換更精準的 hit-target)。
-const HiringGapChart = memo(function HiringGapChart({ onHover }: { onHover: (info: GapHoverInfo | null) => void }) {
+// 一張 panel = 一個 group(IDL 或 DL):兩根長條(Budget 主色 / Actual 淺色,真實 0 起算軸維持
+// 誠實比例)+ 一條 Gap 折線疊在長條圖上方(雙 Y 軸手法:折線用另一條完全獨立、刻意下壓 domain 的
+// 隱藏軸,讓線條視覺上「浮」在長條之上,不與長條共用比例尺,否則 ~900-970 的 gap 在
+// 15,000-20,000 的長條尺度下會直接貼平看不出變化)。bars 軸與 gap 軸都 hide——user 指定「不用
+// 顯示 gap 的 Y 軸」,而 bars 的數字已用 LabelList 直接標在長條上,軸刻度是多餘的。
+// @story-baseline: @qijenchen/design-system/components/Chart/chart.stories.tsx#BarChartRevenue
+// @story-baseline: @qijenchen/design-system/components/Chart/chart.stories.tsx#LineChartResponseTime
+function HiringGapPanel({
+  label,
+  data,
+  primaryColor,
+  lightColor,
+}: {
+  label: string
+  data: GapPanelDatum[]
+  primaryColor: string
+  lightColor: string
+}) {
+  const gapValues = data.map((d) => d.gap)
+  const minGap = Math.min(...gapValues)
+  const maxGap = Math.max(...gapValues)
+  const gapSpan = Math.max(maxGap - minGap, 1)
+  const panelConfig = {
+    budget: { label: 'Budget', color: primaryColor },
+    actual: { label: 'Actual', color: lightColor },
+    gap: { label: `${label} Gap`, color: primaryColor },
+  } satisfies ChartConfig
+
+  return (
+    <div className="flex-1 min-h-0 flex flex-col">
+      <div className="flex items-center justify-between">
+        <span className="text-caption font-medium text-fg-secondary">{label}</span>
+        <div className="flex items-center gap-[var(--layout-space-loose)] text-caption text-fg-muted">
+          <span className="flex items-center gap-[var(--layout-space-tight)]">
+            <Square size={8} fill={primaryColor} stroke="none" />
+            Budget
+          </span>
+          <span className="flex items-center gap-[var(--layout-space-tight)]">
+            <Square size={8} fill={lightColor} stroke="none" />
+            Actual
+          </span>
+        </div>
+      </div>
+      <ChartContainer config={panelConfig} className="flex-1 min-h-0 mt-[var(--layout-space-tight)]">
+        <ComposedChart data={data} barGap={10} margin={{ top: 32, right: 12, left: 12, bottom: 0 }}>
+          <XAxis dataKey="quarter" tickLine={false} axisLine={false} tickMargin={8} />
+          {/* bars 軸頂端留多一點空間(+16000,遠大於長條本身量級的一半)——長條頂端數字標籤跟
+              上面浮動的 gap 折線各佔一塊空間,padding 不夠兩者會疊在一起看不清楚。 */}
+          <YAxis yAxisId="bars" hide domain={[0, 'dataMax + 16000']} />
+          <YAxis yAxisId="gap" hide domain={[minGap - gapSpan * 16, maxGap + gapSpan * 1.2]} />
+          <ChartTooltip content={<ChartTooltipContent indicator="dot" />} />
+          {/* Budget/Actual 兩根長條緊鄰,數字標籤若都貼在各自長條正上方(同一高度)會因為長條間距
+              小於文字寬度而互相疊字——改成兩層階梯式:Budget 標籤貼近長條頂(offset 4),
+              Actual 標籤拉高到更上層(offset 22),兩層彼此不重疊,再上面留給折線。 */}
+          <Bar yAxisId="bars" dataKey="budget" fill="var(--color-budget)" radius={2} barSize={18}>
+            <LabelList dataKey="budget" position="top" offset={4} formatter={hiringGapValueFormatter} className="text-caption" />
+          </Bar>
+          <Bar yAxisId="bars" dataKey="actual" fill="var(--color-actual)" radius={2} barSize={18}>
+            <LabelList dataKey="actual" position="top" offset={22} formatter={hiringGapValueFormatter} className="text-caption" />
+          </Bar>
+          <Line
+            yAxisId="gap"
+            dataKey="gap"
+            type="monotone"
+            stroke="var(--color-gap)"
+            strokeWidth={2}
+            dot={{ r: 3, fill: 'var(--color-gap)', strokeWidth: 0 }}
+          >
+            <LabelList dataKey="gap" position="top" offset={10} formatter={hiringGapValueFormatter} className="text-caption" style={{ fill: primaryColor, fontWeight: 600 }} />
+          </Line>
+        </ComposedChart>
+      </ChartContainer>
+    </div>
+  )
+}
+
+function HiringGapChart() {
   return (
     <ScoreCard className="flex-1 min-w-0 min-h-0 flex flex-col overflow-hidden">
       <CardTitleWithUpdated title="Hiring Gap" updatedAt="2026/08/26 06:00" />
-      {/* 標題與圖表間距拉開至 16px(loose token,對齊 designer 規範下限)。
-          2026-09-14 user 指定改成折線圖:IDL / DL 各一條線,只畫 Gap 絕對數字(如「2026 Q1 IDL Gap 500」)。
-          @story-baseline: @qijenchen/design-system/components/Chart/chart.stories.tsx#LineChartResponseTime */}
-      <ChartContainer config={hiringGapConfig} className="flex-1 min-h-0 mt-[var(--layout-space-loose)]">
-        <LineChart accessibilityLayer data={HIRING_GAP_TREND} margin={{ top: 20, right: 30, bottom: 12 }}>
-          <CartesianGrid vertical={false} />
-          <XAxis dataKey="quarter" tickLine={false} axisLine={false} tickMargin={8} />
-          {/* 數值集中在 ~900-970,固定 [0, dataMax] 會讓線幾乎貼平;改用貼緊資料範圍的動態 domain,
-              上下各留白給節點常駐標籤(top)與 legend(bottom)。 */}
-          <YAxis tickLine={false} axisLine={false} width={40} domain={['dataMin - 60', 'dataMax + 40']} />
-          {/* 無 <ChartTooltip> —— hover 明細改由每個節點自己的 GapDot(見上方定義)負責,
-              recharts 內建的 axis 共用 tooltip 在這張圖不需要、也達不到 user 要的「各節點分開」
-              效果(見 GapDot 上方註解:LineChart 架構限制)。 */}
-          {/* Recharts Legend 預設依 dataKey 字母排序(dlGap < idlGap)自動排 DL 在前,與 IDL 排最前面的要求相反 —
-              改用自訂 content function,直接照 hiringGapConfig 順序(IDL 先)畫,不經 recharts 自動排序
-              (同 Turnover rate legend 已用的手法)。 */}
-          <ChartLegend
-            content={() => (
-              <div className="flex items-center justify-center gap-[var(--layout-space-loose)] pt-[var(--layout-space-tight)]">
-                {(['idlGap', 'dlGap'] as const).map((key) => (
-                  <div key={key} className="flex items-center gap-[var(--layout-space-tight)] text-fg-secondary text-caption">
-                    <Square size={8} fill={hiringGapConfig[key].color} stroke="none" />
-                    {hiringGapConfig[key].label}
-                  </div>
-                ))}
-              </div>
-            )}
-          />
-          {/* user 指定 Gap 數值要「直接寫在節點上面」,非只 hover 才看得到 —— 加 LabelList 常駐標籤。
-              IDL 標在上方、DL 標在下方,避免兩條線數值接近(~900-970)時標籤互相重疊。
-              dot 換成 GapDot(見上方定義)—— 每個節點自己回報 hover 明細給 GapHoverCard,取代
-              recharts 內建共用 axis tooltip(shared=false 對 LineChart 不生效,已移除該行 <ChartTooltip>)。
-              activeDot={false}:recharts 就算沒掛 <ChartTooltip> 也會在滑鼠移到節點附近時,自己
-              疊一顆 class="recharts-dot" 的 active-dot 蓋在最上層(比我們的 GapDot 晚進 DOM、
-              後畫蓋上),導致滑鼠明明沒動卻被判定「離開」我們的命中區——這才是 hover 一直閃斷
-              的根因(GapDot key 穩定、React 不會重掛;元件也已用 React.memo 隔離重渲染,兩者都
-              排除後才抓到是這顆 recharts 自己補的圓)。關掉它,hover 完全交給 GapDot 自己處理。 */}
-          <Line
-            dataKey="idlGap"
-            type="monotone"
-            stroke="var(--color-idlGap)"
-            strokeWidth={2}
-            activeDot={false}
-            dot={(p: DotItemDotProps) => (
-              <GapDot key={`idl-${p.index}`} cx={p.cx} cy={p.cy} payload={p.payload as HiringGapRow} seriesKey="idlGap" onHover={onHover} />
-            )}
-          >
-            <LabelList dataKey="idlGap" position="top" offset={16} formatter={hiringGapLabelFormatter} className="text-caption" style={{ fill: 'var(--color-idlGap)' }} />
-          </Line>
-          <Line
-            dataKey="dlGap"
-            type="monotone"
-            stroke="var(--color-dlGap)"
-            strokeWidth={2}
-            activeDot={false}
-            dot={(p: DotItemDotProps) => (
-              <GapDot key={`dl-${p.index}`} cx={p.cx} cy={p.cy} payload={p.payload as HiringGapRow} seriesKey="dlGap" onHover={onHover} />
-            )}
-          >
-            <LabelList dataKey="dlGap" position="bottom" offset={16} formatter={hiringGapLabelFormatter} className="text-caption" style={{ fill: 'var(--color-dlGap)' }} />
-          </Line>
-        </LineChart>
-      </ChartContainer>
+      <div className="flex-1 min-h-0 flex flex-col gap-[var(--layout-space-loose)] mt-[var(--layout-space-loose)]">
+        <HiringGapPanel label="IDL" data={IDL_GAP_PANEL_DATA} primaryColor="var(--color-blue-6)" lightColor="var(--color-blue-3)" />
+        <HiringGapPanel label="DL" data={DL_GAP_PANEL_DATA} primaryColor="var(--color-purple-6)" lightColor="var(--color-purple-3)" />
+      </div>
     </ScoreCard>
   )
-})
+}
 
 function OverviewPage() {
-  // GapHoverCard 浮層資料——見 HiringGapChart/GapDot 上方註解:必須跟 <LineChart> 子樹的
-  // render 完全隔離(memo + 恆定 onHover),所以浮層本身在這裡、chart 子樹在別的 memo 元件。
-  const [gapHoverInfo, setGapHoverInfo] = useState<GapHoverInfo | null>(null)
   return (
     <div className="px-[var(--layout-space-tight)] py-[var(--layout-space-tight)] space-y-[var(--layout-space-tight)]">
-      <GapHoverCard info={gapHoverInfo} />
-      {/* Row 1: Turnover rate(折線,三系列)+ Hiring gap(長條)— 橫向兩張卡 */}
-      {/* 2026-08-31 user 指定:Turnover rate 與 Hiring Gap 兩張圖表左右交換位置(Hiring Gap 現在在左)。 */}
-      <section className="flex gap-[var(--layout-space-loose)] h-[280px]">
-        <HiringGapChart onHover={setGapHoverInfo} />
+      {/* Row 1: Turnover rate(折線,三系列)+ Hiring gap(IDL/DL 兩張長條+折線 combo)— 橫向兩張卡。
+          Hiring Gap 現在內部塞兩張獨立的 mini chart(見 HiringGapChart),需要比單張折線圖更高的
+          row,才放得下兩組長條+折線不擠壓(280px → 460px)。
+          2026-08-31 user 指定:Turnover rate 與 Hiring Gap 兩張圖表左右交換位置(Hiring Gap 現在在左)。 */}
+      <section className="flex gap-[var(--layout-space-loose)] h-[460px]">
+        <HiringGapChart />
 
         <ScoreCard className="flex-1 min-w-0 min-h-0 flex flex-col overflow-hidden">
           <CardTitleWithUpdated title="Turnover rate" updatedAt="2026/08/26 06:00" />
